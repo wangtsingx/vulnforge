@@ -12,6 +12,7 @@ MCP-based Linux C/C++ source security research MVP.
   - `vulnforge-codeql`: CodeQL database creation and analysis.
   - `vulnforge-knowledge`: CVE lookup, NVD search, and patch pattern extraction.
   - `vulnforge-fuzz`: fuzz target management, background runs, and crash collection.
+  - `vulnforge-tasks`: research task state machine and finding linkage.
 - Research Skills for vulnerability research, source audit, and patch analysis.
 - A shared Finding JSON schema and local finding store.
 - No automatic exploit generation and no remote-target testing.
@@ -74,6 +75,7 @@ uv run vulnforge-report
 uv run vulnforge-codeql
 uv run vulnforge-knowledge
 uv run vulnforge-fuzz
+uv run vulnforge-tasks
 ```
 
 Register projects via CLI:

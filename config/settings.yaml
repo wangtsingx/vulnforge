@@ -44,3 +44,6 @@ fuzzing:
   max_cpu_seconds: 3600
   max_file_mb: 512
   max_processes: 64
+
+tasks:
+  tasks_dir: tasks
