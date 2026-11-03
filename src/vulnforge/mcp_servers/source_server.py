@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from vulnforge.config import load_yaml, project_root
+from vulnforge.config import load_yaml, override_config, project_root
 
 mcp = FastMCP("vulnforge-source")
 BASE = Path(os.getenv("VULNFORGE_HOME", ".")).resolve()
@@ -19,7 +19,7 @@ def settings() -> dict:
 
 
 def get_root(project: str) -> Path:
-    return project_root(project, PROJECTS_CONFIG)
+    return project_root(project, override_config(PROJECTS_CONFIG))
 
 
 def safe_file(project: str, relative_path: str) -> Path:
@@ -127,3 +127,90 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+FUNC_DEF_RE = re.compile(
+    r"^[ \t]*(?:static\s+|inline\s+|const\s+|unsigned\s+|signed\s+|struct\s+|enum\s+|union\s+)*"
+    r"(?:[\w\*]\s*)+?(\w+)\s*\([^;{)]*\)\s*\{",
+)
+
+IGNORE_DIRS = {".git", ".svn", "node_modules", "__pycache__", ".venv", "build", "dist"}
+
+
+def iter_source_files(root: Path, allowed: set[str], max_bytes: int):
+    for path in sorted(root.rglob("*")):
+        if any(part in IGNORE_DIRS for part in path.relative_to(root).parts):
+            continue
+        if path.is_symlink() or not path.is_file() or path.suffix not in allowed:
+            continue
+        if path.stat().st_size > max_bytes:
+            continue
+        yield path
+
+
+@mcp.tool()
+def function_search(project: str, keyword: str, limit: int = 50) -> dict:
+    """Search for C/C++ function definitions matching a keyword in name or body."""
+    root = get_root(project)
+    allowed = set(settings().get("allowed_extensions", [".c", ".h", ".cc", ".cpp", ".hpp"]))
+    max_bytes = int(settings().get("max_file_bytes", 2_000_000))
+    limit = max(1, min(int(limit), 500))
+    results = []
+    for path in iter_source_files(root, allowed, max_bytes):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line_no, line in enumerate(lines, 1):
+            match = FUNC_DEF_RE.match(line)
+            if not match:
+                continue
+            func_name = match.group(1)
+            if keyword.lower() not in func_name.lower():
+                continue
+            results.append({
+                "file": path.relative_to(root).as_posix(),
+                "line": line_no,
+                "function": func_name,
+                "text": line.strip()[:300],
+            })
+            if len(results) >= limit:
+                return {"project": project, "results": results, "truncated": True}
+    return {"project": project, "results": results, "truncated": False}
+
+
+@mcp.tool()
+def function_context(project: str, relative_path: str, line: int, context_lines: int = 30) -> dict:
+    """Read a function and its surrounding context starting from a line number."""
+    get_root(project)
+    path = safe_file(project, relative_path)
+    max_lines = int(settings().get("max_read_lines", 300))
+    context_lines = max(5, min(int(context_lines), max_lines))
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    if line < 1 or line > len(lines):
+        raise ValueError(f"Line {line} is out of range (1-{len(lines)})")
+    start = max(1, line - context_lines // 2)
+    end = min(len(lines), line + context_lines)
+    content = "\n".join(f"{n}: {lines[n - 1]}" for n in range(start, end + 1))
+    return {
+        "project": project,
+        "file": relative_path,
+        "anchor_line": line,
+        "start_line": start,
+        "end_line": end,
+        "content": content,
+    }
+
+
+@mcp.tool()
+def list_functions(project: str, relative_path: str) -> dict:
+    """List function definitions found in a single source file."""
+    get_root(project)
+    path = safe_file(project, relative_path)
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    functions = []
+    for line_no, line_text in enumerate(lines, 1):
+        match = FUNC_DEF_RE.match(line_text)
+        if match:
+            functions.append({"function": match.group(1), "line": line_no})
+    return {"project": project, "file": relative_path, "functions": functions, "count": len(functions)}

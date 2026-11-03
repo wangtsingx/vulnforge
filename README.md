@@ -5,7 +5,7 @@ MCP-based Linux C/C++ source security research MVP.
 ## Scope
 
 - Four MCP servers:
-  - `vulnforge-source`: read-only source browsing.
+  - `vulnforge-source`: read-only source browsing and function-level analysis.
   - `vulnforge-static`: configured Semgrep scanning.
   - `vulnforge-patch`: read-only Git patch and history analysis.
   - `vulnforge-report`: schema-validated finding storage and Markdown reports.
@@ -116,9 +116,9 @@ All servers use MCP stdio transport and are normally launched by an MCP host/cli
 ## 6. Research workflow
 
 1. Register an exact source revision and verify the Git commit.
-2. Call `project_info`, `list_source_files`, and `search_source`.
+2. Call `project_info`, `list_source_files`, `search_source`, `function_search`, and `list_functions`.
 3. For historical variants, call `patch_history`, `patch_change_list`, and `patch_show`.
-4. Inspect relevant code with `read_source`.
+4. Inspect relevant code with `read_source` or `function_context`.
 5. Run `semgrep_scan` and treat results only as candidate leads.
 6. Save evidence-based records with `create_finding`.
 7. Call `generate_report` to produce `reports/<project>/report.md`.
