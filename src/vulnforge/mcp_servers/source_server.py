@@ -93,10 +93,24 @@ def project_info(project: str) -> dict:
     cfg = load_yaml(override_config(PROJECTS_CONFIG)).get("projects", {}).get(project, {})
     configured_lang = cfg.get("language", "c")
     detected = detect_languages(root)
+    pinned = str(cfg.get("revision", "")).strip()
+    head = ""
+    try:
+        import subprocess
+        proc = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+        if proc.returncode == 0:
+            head = proc.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     return {
         "project": project,
         "description": cfg.get("description", ""),
-        "revision": cfg.get("revision", ""),
+        "revision_pinned": pinned,
+        "revision_head": head,
+        "revision_matches": bool(not pinned or not head or pinned == head),
         "source_root": str(root),
         "configured_language": configured_lang,
         "detected_languages": detected,

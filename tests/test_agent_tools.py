@@ -28,6 +28,8 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     source.mkdir()
     projects.write_text(f"projects:\n  demo:\n    path: {source}\n")
     monkeypatch.setattr("vulnforge.mcp_servers.task_server.PROJECTS_CONFIG", projects)
+    monkeypatch.setattr("vulnforge.mcp_servers.static_server.PROJECTS_CONFIG", projects)
+    monkeypatch.setenv("VULNFORGE_PROJECTS", str(projects))
     task = create_task(project="demo", title="Agent smoke test")
     return settings, task["task_id"]
 
@@ -117,3 +119,37 @@ def test_audit_status_orphan_detection(env):
     )
     status = audit_status(task_id)
     assert status["orphan_candidate_units"] == 1
+
+
+def test_revision_mismatch_blocks_scan(env, monkeypatch):
+    """If a project pins a revision and HEAD differs, semgrep_scan raises."""
+    import subprocess
+
+    from vulnforge.mcp_servers.static_server import semgrep_scan
+    _settings, _task_id = env
+    tmp_path = env[0].parent
+    source = tmp_path / "source"
+    # make it a git repo and commit
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    subprocess.run(["git", "-C", str(source), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(source), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(source), "config", "user.name", "t"], check=True)
+    subprocess.run(["git", "-C", str(source), "commit", "-q", "--allow-empty", "-m", "init"], check=True)
+    head = subprocess.run(
+        ["git", "-C", str(source), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    # pin a different revision
+    projects = tmp_path / "projects.yaml"
+    projects.write_text(f"projects:\n  demo:\n    path: {source}\n    revision: {'0' * 40}\n")
+
+    with pytest.raises(ValueError, match="revision mismatch"):
+        semgrep_scan(project="demo", rules_file="rules/c-memory.yml")
+
+    # now pin the correct revision — scan should proceed past revision check
+    # (it will fail later because semgrep isn't installed, but NOT with revision mismatch)
+    projects.write_text(f"projects:\n  demo:\n    path: {source}\n    revision: {head}\n")
+    try:
+        semgrep_scan(project="demo", rules_file="rules/c-memory.yml")
+    except (RuntimeError, FileNotFoundError) as exc:
+        assert "revision" not in str(exc).lower()

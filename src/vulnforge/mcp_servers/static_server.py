@@ -22,6 +22,24 @@ def semgrep_scan(project: str, rules_file: str | None = None) -> dict:
     The executable and timeout are configuration-controlled. No arbitrary shell is accepted.
     """
     root = project_root(project, override_config(PROJECTS_CONFIG))
+    # Revision pinning: refuse to scan if the pinned revision doesn't match HEAD.
+    project_cfg = load_yaml(override_config(PROJECTS_CONFIG)).get("projects", {}).get(project, {})
+    pinned = str(project_cfg.get("revision", "")).strip()
+    if pinned:
+        import subprocess as _sp
+        try:
+            head_proc = _sp.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=10, check=False,
+            )
+            head = head_proc.stdout.strip()
+            if head and head != pinned:
+                raise ValueError(
+                    f"Source revision mismatch: config pins {pinned[:12]} but HEAD is {head[:12]}. "
+                    "Update the revision with 'vulnforge update' before scanning."
+                )
+        except FileNotFoundError:
+            pass  # not a git repo; skip check
     cfg = load_yaml(SETTINGS_CONFIG).get("static", {})
     binary = str(cfg.get("semgrep_binary", "semgrep"))
     from vulnforge.mcp_servers.source_server import get_rules_file
