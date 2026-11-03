@@ -28,3 +28,9 @@ languages:
     rules_file: rules/python-security.yml
     skill: python-audit
     codeql_language: python
+
+  mixed:
+    extensions: [".c", ".h", ".cc", ".cpp", ".hpp", ".go", ".rs", ".py"]
+    rules_file: ""
+    skill: source-audit
+    codeql_language: ""

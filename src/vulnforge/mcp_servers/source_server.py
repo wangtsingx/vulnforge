@@ -64,16 +64,42 @@ def safe_file(project: str, relative_path: str) -> Path:
     return candidate
 
 
+LANG_SIGNATURES = {
+    ".c": "c", ".h": "c", ".cc": "cpp", ".cpp": "cpp", ".hpp": "cpp",
+    ".go": "go", ".rs": "rust", ".py": "python",
+}
+
+
+def detect_languages(root: Path) -> list[str]:
+    """Scan the source tree and return a sorted list of detected languages."""
+    found: set[str] = set()
+    for path in root.rglob("*"):
+        if any(part in IGNORE_DIRS for part in path.relative_to(root).parts):
+            continue
+        if path.is_symlink() or not path.is_file():
+            continue
+        lang = LANG_SIGNATURES.get(path.suffix)
+        if lang:
+            found.add(lang)
+        if len(found) >= len(LANG_SIGNATURES):
+            break
+    return sorted(found)
+
+
 @mcp.tool()
 def project_info(project: str) -> dict:
-    """Return registered project path and basic source-tree metadata."""
+    """Return registered project path, language, and detected languages in the source tree."""
     root = get_root(project)
-    cfg = load_yaml(PROJECTS_CONFIG).get("projects", {}).get(project, {})
+    cfg = load_yaml(override_config(PROJECTS_CONFIG)).get("projects", {}).get(project, {})
+    configured_lang = cfg.get("language", "c")
+    detected = detect_languages(root)
     return {
         "project": project,
         "description": cfg.get("description", ""),
         "revision": cfg.get("revision", ""),
         "source_root": str(root),
+        "configured_language": configured_lang,
+        "detected_languages": detected,
     }
 
 

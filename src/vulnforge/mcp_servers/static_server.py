@@ -26,6 +26,8 @@ def semgrep_scan(project: str, rules_file: str | None = None) -> dict:
     binary = str(cfg.get("semgrep_binary", "semgrep"))
     from vulnforge.mcp_servers.source_server import get_rules_file
     configured_rules = get_rules_file(project) if rules_file is None else str(cfg.get("rules_file", "rules/c-memory.yml"))
+    if not configured_rules:
+        raise ValueError("Mixed-language projects require an explicit rules_file parameter")
     rules_arg = Path(rules_file or configured_rules)
     rules = (rules_arg if rules_arg.is_absolute() else BASE / rules_arg).resolve()
     allowed_rules_root = (BASE / "rules").resolve()

@@ -139,8 +139,9 @@ All servers use MCP stdio transport and are normally launched by an MCP host/cli
 | Go | `.go` | `rules/go-security.yml` | `go-audit` |
 | Rust | `.rs` | `rules/rust-security.yml` | `rust-audit` |
 | Python | `.py` | `rules/python-security.yml` | `python-audit` |
+| Mixed | all above | explicit per scan | `source-audit` |
 
-Set the `language` field in `config/projects.yaml` to select the language for a project:
+Set the `language` field in `config/projects.yaml` to select the language for a project. Use `mixed` for projects containing multiple languages:
 
 ```yaml
 projects:
