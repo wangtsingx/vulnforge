@@ -1,0 +1,35 @@
+rules:
+  - id: vulnforge.integer-conversion-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review implicit integer conversion and potential truncation when
+      assigning between signed and unsigned types of different widths.
+    patterns:
+      - pattern-either:
+          - pattern: (unsigned int $X) = (int $Y)
+          - pattern: (int $X) = (unsigned int $Y)
+          - pattern: (unsigned long $X) = (unsigned int $Y)
+
+  - id: vulnforge.arithmetic-overflow-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review addition, subtraction, or multiplication of integers from
+      untrusted input without explicit bounds checks.
+    patterns:
+      - pattern-either:
+          - pattern: $LEN + $OFFSET
+          - pattern: $LEN - $OFFSET
+          - pattern: $LEN * $COUNT
+    metadata:
+      category: security
+      technology: [c]
+
+  - id: vulnforge.sizeof-multiplication-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review multiplication in sizeof or allocation expressions for
+      potential integer overflow before the allocation.
+    pattern: malloc(sizeof($TYPE) * $COUNT)

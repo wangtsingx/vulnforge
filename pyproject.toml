@@ -25,6 +25,9 @@ vulnforge-source = "vulnforge.mcp_servers.source_server:main"
 vulnforge-static = "vulnforge.mcp_servers.static_server:main"
 vulnforge-patch = "vulnforge.mcp_servers.patch_server:main"
 vulnforge-report = "vulnforge.mcp_servers.report_server:main"
+vulnforge-codeql = "vulnforge.mcp_servers.codeql_server:main"
+vulnforge-knowledge = "vulnforge.mcp_servers.knowledge_server:main"
+vulnforge = "vulnforge.cli:main"
 
 [tool.uv]
 package = true

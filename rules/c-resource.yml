@@ -1,0 +1,36 @@
+rules:
+  - id: vulnforge.file-descriptor-leak-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review whether the file descriptor is closed on all error paths
+      after a successful open call.
+    pattern: |
+      $FD = open(...);
+      ...
+      return ...;
+
+  - id: vulnforge.memory-leak-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review whether the allocated memory is freed on all error paths
+      after a successful malloc or calloc call.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $PTR = malloc(...);
+              ...
+              return ...;
+          - pattern: |
+              $PTR = calloc(...);
+              ...
+              return ...;
+
+  - id: vulnforge.double-free-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review whether the same pointer can be freed more than once due to
+      error paths or missing NULL assignment.
+    pattern: free($PTR)

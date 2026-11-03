@@ -19,3 +19,20 @@ report:
   findings_dir: findings
   reports_dir: reports
   max_findings: 1000
+
+codeql:
+  binary: codeql
+  language: cpp
+  databases_dir: databases
+  create_timeout_seconds: 1800
+  analyze_timeout_seconds: 3600
+  max_output_bytes: 5000000
+  allowed_query_suites:
+    - cpp-security-extended
+    - cpp-code-scanning
+    - security-extended
+
+knowledge:
+  http_timeout_seconds: 30
+  git_timeout_seconds: 60
+  max_response_bytes: 500000

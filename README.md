@@ -9,6 +9,8 @@ MCP-based Linux C/C++ source security research MVP.
   - `vulnforge-static`: configured Semgrep scanning.
   - `vulnforge-patch`: read-only Git patch and history analysis.
   - `vulnforge-report`: schema-validated finding storage and Markdown reports.
+  - `vulnforge-codeql`: CodeQL database creation and analysis.
+  - `vulnforge-knowledge`: CVE lookup, NVD search, and patch pattern extraction.
 - Research Skills for vulnerability research, source audit, and patch analysis.
 - A shared Finding JSON schema and local finding store.
 - No automatic exploit generation and no remote-target testing.
@@ -68,6 +70,17 @@ uv run vulnforge-source
 uv run vulnforge-static
 uv run vulnforge-patch
 uv run vulnforge-report
+uv run vulnforge-codeql
+uv run vulnforge-knowledge
+```
+
+Register projects via CLI:
+
+```bash
+uv run vulnforge add <name> </path/to/source> --description "..."
+uv run vulnforge list
+uv run vulnforge update <name> --revision <commit>
+uv run vulnforge remove <name>
 ```
 
 All servers use MCP stdio transport and are normally launched by an MCP host/client.
