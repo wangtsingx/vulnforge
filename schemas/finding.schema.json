@@ -19,7 +19,18 @@
       "maxLength": 1600
     },
     "blocked_reason": {
-      "type": ["string", "null"]
+      "type": ["string", "null"],
+      "minLength": 10,
+      "maxLength": 2000
+    },
+    "validation_plan": {
+      "type": ["object", "null"],
+      "properties": {
+        "local": {"type": "string"},
+        "deployment": {"type": "string"},
+        "required_permission": {"type": "string"}
+      },
+      "additionalProperties": false
     },
     "title": {"type": "string"},
     "cwe": {"type": ["string", "null"]},

@@ -61,5 +61,10 @@ def test_explicit_fingerprint_allows_update(settings: Path):
         "evidence": [],
     }
     save_finding(record, settings)
-    updated = save_finding({**record, "status": "confirmed"}, settings)
+    confirmed_record = {
+        **record,
+        "status": "confirmed",
+        "verification": {"reproducible": True, "human_reviewed": True},
+    }
+    updated = save_finding(confirmed_record, settings)
     assert updated["fingerprint"] == "fp/demo/custom"

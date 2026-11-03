@@ -177,19 +177,57 @@ def update_coverage_unit(
 
 
 @mcp.tool()
-def link_finding_to_coverage(task_id: str, coverage_id: str, fingerprint: str) -> dict:
-    """Link a finding fingerprint to a candidate coverage unit."""
+def link_finding_to_coverage(
+    task_id: str,
+    coverage_id: str,
+    finding_id: str,
+    fingerprint: str | None = None,
+) -> dict:
+    """Validate a finding and link its fingerprint to a candidate coverage unit.
+
+    Also writes coverage_id back onto the finding so the relationship is bidirectional.
+    """
     records = load_ledger(task_id, SETTINGS_CONFIG)
+    target = None
     for record in records:
         if record.get("coverage_id") == coverage_id:
-            if record.get("status") != "candidate":
-                raise ValueError("Findings can only be linked to candidate coverage units")
-            fingerprints = set(record.get("result_fingerprints", []))
-            fingerprints.add(fingerprint)
-            record["result_fingerprints"] = sorted(fingerprints)
-            save_ledger(records, task_id, SETTINGS_CONFIG)
-            return task_coverage_summary(task_id, SETTINGS_CONFIG)
-    raise ValueError(f"Coverage unit not found: {coverage_id}")
+            target = record
+            break
+    if target is None:
+        raise ValueError(f"Coverage unit not found: {coverage_id}")
+    if target.get("status") != "candidate":
+        raise ValueError("Findings can only be linked to candidate coverage units")
+    from vulnforge.findings import load_finding, save_finding
+
+    finding = load_finding(finding_id, SETTINGS_CONFIG)
+    actual_fingerprint = str(finding.get("fingerprint", ""))
+    if fingerprint and fingerprint != actual_fingerprint:
+        raise ValueError("Fingerprint does not match the finding")
+    fingerprints = set(target.get("result_fingerprints", []))
+    fingerprints.add(actual_fingerprint)
+    target["result_fingerprints"] = sorted(fingerprints)
+    save_ledger(records, task_id, SETTINGS_CONFIG)
+    if finding.get("coverage_id") != coverage_id:
+        finding["coverage_id"] = coverage_id
+        save_finding(finding, SETTINGS_CONFIG)
+    return task_coverage_summary(task_id, SETTINGS_CONFIG)
+
+
+@mcp.tool()
+def coverage_orphans(task_id: str) -> dict:
+    """Return candidate coverage fingerprints that do not exist in the finding store."""
+    records = load_ledger(task_id, SETTINGS_CONFIG)
+    from vulnforge.findings import list_findings
+
+    known = {item["fingerprint"] for item in list_findings(SETTINGS_CONFIG) if item.get("fingerprint")}
+    result = []
+    for record in records:
+        if record.get("status") != "candidate":
+            continue
+        orphan = [fp for fp in record.get("result_fingerprints", []) if fp not in known]
+        if orphan:
+            result.append({"coverage_id": record["coverage_id"], "orphans": sorted(orphan)})
+    return {"task_id": task_id, "orphan_units": result}
 
 
 @mcp.tool()

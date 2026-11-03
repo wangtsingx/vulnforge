@@ -35,6 +35,12 @@ def validate_finding(finding: dict[str, Any], schema_file: str | Path | None = N
     fingerprint = normalize_finding_fingerprint(finding)
     if not FINGERPRINT_RE.fullmatch(fingerprint):
         raise ValueError("Invalid fingerprint")
+    if str(finding.get("status", "")) == "needs_validation":
+        blocked = str(finding.get("blocked_reason") or "").strip()
+        if len(blocked) < 10:
+            raise ValueError("needs_validation requires blocked_reason (10-2000 chars)")
+        if str(finding.get("severity", "unknown")) != "unknown":
+            raise ValueError("needs_validation must not have severity")
 
 
 def finding_file(root: Path, finding_id: str) -> Path:
@@ -81,6 +87,10 @@ def save_finding(finding: dict[str, Any], settings_path: str | Path) -> dict[str
     duplicate = find_duplicate_fingerprint(fingerprint, str(finding["finding_id"]), settings_path, root)
     if duplicate:
         raise ValueError(f"Duplicate finding fingerprint already exists: {duplicate}")
+    if str(finding.get("status", "")) == "confirmed":
+        verification = finding.get("verification") or {}
+        if not verification.get("reproducible") or not verification.get("human_reviewed"):
+            raise ValueError("confirmed requires reproducible and human_reviewed evidence")
     record = dict(finding)
     now = datetime.now(UTC).isoformat()
     if path.exists():
@@ -123,6 +133,8 @@ def list_findings(settings_path: str | Path) -> list[dict[str, Any]]:
                 "title": data["title"],
                 "severity": data.get("severity", "unknown"),
                 "fingerprint": data.get("fingerprint"),
+                "coverage_id": data.get("coverage_id"),
+                "blocked_reason": data.get("blocked_reason"),
                 "updated_at": data.get("updated_at"),
             }
         )
