@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -157,6 +158,7 @@ def import_scan_results(project: str, task_id: str, scan_output: dict) -> dict:
     from vulnforge.coverage import coverage_id_from_refs
     from vulnforge.findings import list_findings, new_finding_id, save_finding
 
+    source_root = str(project_root(project, override_config(PROJECTS_CONFIG)))
     raw_results = scan_output.get("findings", [])
     if not isinstance(raw_results, list):
         raise TypeError("scan_output.findings must be a list")
@@ -169,6 +171,9 @@ def import_scan_results(project: str, task_id: str, scan_output: dict) -> dict:
     groups: dict[tuple[str, str], list[dict]] = {}
     for result in raw_results:
         path = str(result.get("path") or result.get("location", {}).get("path", "unknown"))
+        resolved = _resolve_source_path(project, path)
+        if resolved is not None:
+            path = resolved.relative_to(Path(source_root)).as_posix()
         check_id = str(result.get("check_id") or "unknown")
         groups.setdefault((path, check_id), []).append(result)
 
@@ -191,6 +196,8 @@ def import_scan_results(project: str, task_id: str, scan_output: dict) -> dict:
         func_names = {str(item.get("extra", {}).get("metavars", {}).get("$FUNC", "")) for item in items}
         func_names.discard("")
         function = next(iter(func_names)) if len(func_names) == 1 else None
+        if not function:
+            function = _enclosing_function(project, path, items)
         line_start = min(int(item.get("start", {}).get("line", 1)) for item in items)
         line_end = max(int(item.get("end", {}).get("line", line_start)) for item in items)
 
@@ -280,6 +287,44 @@ def import_scan_results(project: str, task_id: str, scan_output: dict) -> dict:
 
 
 @mcp.tool()
+def _resolve_source_path(project: str, path: str) -> Path | None:
+    """Resolve a scan path to an existing source file beneath the project root."""
+    try:
+        root = project_root(project, override_config(PROJECTS_CONFIG))
+    except ValueError:
+        return None
+    scan_path = Path(path)
+    if scan_path.is_absolute():
+        candidates = [scan_path]
+    else:
+        candidates = [root / scan_path]
+        candidates.extend(root / Path(*scan_path.parts[index:]) for index in range(1, len(scan_path.parts)))
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_file() and resolved.is_relative_to(root):
+            return resolved
+    return None
+
+
+def _enclosing_function(project: str, path: str, items: list[dict]) -> str | None:
+    """Best-effort enclosing-function extraction when Semgrep omits match metadata."""
+    source_path = _resolve_source_path(project, path)
+    if source_path is None:
+        return None
+    try:
+        text = source_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+
+    start = min(int(item.get("start", {}).get("line", 1)) for item in items)
+    func_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_ *]*\b([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*\{\s*$")
+    for line in reversed(text[:max(0, start - 1)]):
+        match = func_re.match(line.strip())
+        if match:
+            return match.group(1)
+    return None
+
+
 def create_coverage_unit(
     task_id: str,
     surface_ref: str,

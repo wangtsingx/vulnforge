@@ -43,12 +43,18 @@ def semgrep_scan(project: str, rules_file: str | None = None) -> dict:
     cfg = load_yaml(SETTINGS_CONFIG).get("static", {})
     binary = str(cfg.get("semgrep_binary", "semgrep"))
     from vulnforge.mcp_servers.source_server import get_rules_file
-    configured_rules = get_rules_file(project) if rules_file is None else str(cfg.get("rules_file", "rules/c-memory.yml"))
+    configured_rules = get_rules_file(project) if rules_file is None else rules_file
     if not configured_rules:
         raise ValueError("Mixed-language projects require an explicit rules_file parameter")
     rules_arg = Path(rules_file or configured_rules)
-    rules = (rules_arg if rules_arg.is_absolute() else BASE / rules_arg).resolve()
-    allowed_rules_root = (BASE / "rules").resolve()
+    repo_root = Path(__file__).resolve().parents[3]
+    allowed_rules_root = (repo_root / "rules").resolve()
+    if rules_arg.is_absolute():
+        rules = rules_arg.resolve()
+    elif rules_arg.parts and rules_arg.parts[0] == "rules":
+        rules = (repo_root / rules_arg).resolve()
+    else:
+        rules = (allowed_rules_root / rules_arg).resolve()
     if not rules.is_relative_to(allowed_rules_root) or not rules.is_file():
         raise ValueError("Rules file must be an existing file under the configured rules directory")
 

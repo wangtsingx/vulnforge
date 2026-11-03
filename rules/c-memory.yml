@@ -1,27 +1,65 @@
 rules:
-  - id: vulnforge.suspicious-unbounded-copy
+  - id: c-memory.suspicious-unbounded-copy
     languages: [c]
     severity: WARNING
     message: >-
       Review whether the destination has sufficient capacity and whether
-      the source is attacker-controlled. This pattern alone is not proof
-      of a vulnerability.
+      the source or length is attacker-controlled. This pattern alone is
+      not proof of a vulnerability.
     patterns:
       - pattern-either:
           - pattern: strcpy($DST, $SRC)
           - pattern: strcat($DST, $SRC)
+          - pattern: strncpy($DST, $SRC, $LEN)
+          - pattern: memcpy($DST, $SRC, $LEN)
+      - pattern-not: memcpy($DST, $SRC, (size_t)$LEN)
 
-  - id: vulnforge.untrusted-format-string-review
+  - id: c-memory.integer-overflow-before-bound
     languages: [c]
     severity: WARNING
     message: >-
-      Review whether the format string is controlled by untrusted input.
-      A non-literal format string is not automatically exploitable.
-    pattern: printf($FMT, ...)
+      Review whether attacker-controlled arithmetic can overflow before a
+      bounds check. This pattern alone is not proof of a vulnerability.
+    patterns:
+      - pattern: $TYPE $TOTAL = $LEN + $CONST;
+      - metavariable-regex:
+          metavariable: $TYPE
+          regex: ^(int|unsigned int|long|size_t)$
 
-  - id: vulnforge.allocation-multiplication-review
+  - id: c-memory.file-descriptor-leak
     languages: [c]
     severity: WARNING
     message: >-
-      Review multiplication overflow and validate bounds before allocation.
-    pattern: malloc($SIZE * $COUNT)
+      Review whether the opened FILE* is closed on every return path.
+      This pattern alone is not proof of a vulnerability.
+    patterns:
+      - pattern: |
+          FILE *$FP = fopen(...);
+          ...
+      - pattern-not: |
+          FILE *$FP = fopen(...);
+          ...
+          fclose($FP);
+          ...
+      - pattern-not: |
+          FILE *$FP = fopen(...);
+          ...
+          if (!$FP) {
+            ...
+          }
+          ...
+
+  - id: c-memory.untrusted-format-string-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review whether a non-literal printf-style format string is controlled
+      by untrusted input.
+    patterns:
+      - pattern-either:
+          - pattern: printf($FMT, ...)
+          - pattern: fprintf($FP, $FMT, ...)
+          - pattern: snprintf($BUF, $SIZE, $FMT, ...)
+      - pattern-not: printf("...", ...)
+      - pattern-not: fprintf($FP, "...", ...)
+      - pattern-not: snprintf($BUF, $SIZE, "...", ...)
