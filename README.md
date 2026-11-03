@@ -130,7 +130,28 @@ All servers use MCP stdio transport and are normally launched by an MCP host/cli
 }
 ```
 
-## 6. Research workflow
+## 6. Supported languages
+
+| Language | Extensions | Rules | Skill |
+|---|---|---|---|
+| C | `.c`, `.h` | `rules/c-memory.yml` | `source-audit` |
+| C++ | `.c`, `.h`, `.cc`, `.cpp`, `.hpp` | `rules/c-memory.yml` | `source-audit` |
+| Go | `.go` | `rules/go-security.yml` | `go-audit` |
+| Rust | `.rs` | `rules/rust-security.yml` | `rust-audit` |
+| Python | `.py` | `rules/python-security.yml` | `python-audit` |
+
+Set the `language` field in `config/projects.yaml` to select the language for a project:
+
+```yaml
+projects:
+  my-go-app:
+    path: /path/to/source
+    language: go
+```
+
+Language definitions are in `config/languages.yaml`.
+
+## 7. Research workflow
 
 1. Register an exact source revision and verify the Git commit.
 2. Call `project_info`, `list_source_files`, `search_source`, `function_search`, and `list_functions`.
@@ -141,7 +162,7 @@ All servers use MCP stdio transport and are normally launched by an MCP host/cli
 7. Call `generate_report` to produce `reports/<project>/report.md`.
 8. Separate confirmed facts, inferences, and unverified hypotheses.
 
-## 7. Finding model
+## 8. Finding model
 
 Finding records are validated against `schemas/finding.schema.json` before storage.
 
@@ -166,7 +187,7 @@ Minimum structure:
 
 `confirmed` status requires reproducible verification evidence and human review.
 
-## 8. Safety and limitations
+## 9. Safety and limitations
 
 - Source and patch MCP tools are read-only.
 - Git revisions are restricted to hexadecimal commit IDs.
@@ -176,7 +197,7 @@ Minimum structure:
 - Run untrusted builds and fuzzing in a disposable VM/container with resource limits.
 - Pin source revisions and tool versions for reproducibility.
 
-## 9. Tests
+## 10. Tests
 
 ```bash
 uv run pytest

@@ -1,0 +1,76 @@
+rules:
+  - id: vulnforge.python.sql-injection-review
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Review SQL query construction from f-strings or string concatenation.
+      Use parameterized queries instead.
+    patterns:
+      - pattern-either:
+          - pattern: $CURSOR.execute(f"...{$VAR}...")
+          - pattern: $CURSOR.execute("..." + $VAR + "...")
+          - pattern: $CURSOR.execute("..." % $VAR)
+
+  - id: vulnforge.python.command-injection-review
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Review command execution with user-controlled input. Use
+      subprocess with argument lists and shell=False.
+    patterns:
+      - pattern-either:
+          - pattern: os.system($CMD)
+          - pattern: subprocess.run($CMD, shell=True)
+          - pattern: subprocess.call($CMD, shell=True)
+          - pattern: subprocess.Popen($CMD, shell=True)
+          - pattern: os.popen($CMD)
+
+  - id: vulnforge.python.deserialization-review
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Review deserialization of untrusted data. pickle and yaml.load
+      can execute arbitrary code; use safe alternatives.
+    patterns:
+      - pattern-either:
+          - pattern: pickle.loads($DATA)
+          - pattern: yaml.load($DATA)
+          - pattern: yaml.load($DATA, Loader=yaml.FullLoader)
+
+  - id: vulnforge.python.path-traversal-review
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Review file operations with user-controlled paths. Validate and
+      normalize paths to prevent directory traversal.
+    patterns:
+      - pattern-either:
+          - pattern: open($PATH)
+          - pattern: open($PATH, ...)
+          - pattern: os.remove($PATH)
+          - pattern: shutil.rmtree($PATH)
+
+  - id: vulnforge.python.ssrf-review
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Review HTTP requests with user-controlled URLs. Validate scheme,
+      host, and port against an allowlist.
+    patterns:
+      - pattern-either:
+          - pattern: requests.get($URL)
+          - pattern: requests.post($URL)
+          - pattern: urllib.request.urlopen($URL)
+
+  - id: vulnforge.python.hardcoded-secret-review
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Review whether this is a hardcoded credential. Use environment
+      variables or a secrets manager instead.
+    patterns:
+      - pattern-either:
+          - pattern: $VAR = "password"
+          - pattern: $VAR = "secret"
+          - pattern: $VAR = "api_key"
+          - pattern: $VAR = "token"

@@ -1,0 +1,30 @@
+languages:
+  c:
+    extensions: [".c", ".h"]
+    rules_file: rules/c-memory.yml
+    skill: source-audit
+    codeql_language: cpp
+
+  cpp:
+    extensions: [".c", ".h", ".cc", ".cpp", ".hpp"]
+    rules_file: rules/c-memory.yml
+    skill: source-audit
+    codeql_language: cpp
+
+  go:
+    extensions: [".go"]
+    rules_file: rules/go-security.yml
+    skill: go-audit
+    codeql_language: go
+
+  rust:
+    extensions: [".rs"]
+    rules_file: rules/rust-security.yml
+    skill: rust-audit
+    codeql_language: cpp
+
+  python:
+    extensions: [".py"]
+    rules_file: rules/python-security.yml
+    skill: python-audit
+    codeql_language: python

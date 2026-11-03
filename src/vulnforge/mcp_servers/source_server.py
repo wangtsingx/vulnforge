@@ -12,10 +12,36 @@ mcp = FastMCP("vulnforge-source")
 BASE = Path(os.getenv("VULNFORGE_HOME", ".")).resolve()
 PROJECTS_CONFIG = Path(os.getenv("VULNFORGE_PROJECTS", BASE / "config/projects.yaml"))
 SETTINGS_CONFIG = Path(os.getenv("VULNFORGE_SETTINGS", BASE / "config/settings.yaml"))
+LANGUAGES_CONFIG = Path(os.getenv("VULNFORGE_LANGUAGES", BASE / "config/languages.yaml"))
 
 
 def settings() -> dict:
     return load_yaml(SETTINGS_CONFIG).get("source", {})
+
+
+def get_language(project: str) -> str:
+    """Return the configured language for a project (default: c)."""
+    cfg = load_yaml(override_config(PROJECTS_CONFIG)).get("projects", {}).get(project, {})
+    return str(cfg.get("language", "c"))
+
+
+def get_allowed_extensions(project: str) -> set[str]:
+    """Return file extensions for the project's language, falling back to source config."""
+    lang = get_language(project)
+    languages = load_yaml(LANGUAGES_CONFIG).get("languages", {}) if LANGUAGES_CONFIG.is_file() else {}
+    lang_cfg = languages.get(lang, {})
+    extensions = lang_cfg.get("extensions")
+    if extensions:
+        return set(extensions)
+    return set(settings().get("allowed_extensions", [".c", ".h"]))
+
+
+def get_rules_file(project: str) -> str:
+    """Return the Semgrep rules file for the project's language."""
+    lang = get_language(project)
+    languages = load_yaml(LANGUAGES_CONFIG).get("languages", {}) if LANGUAGES_CONFIG.is_file() else {}
+    lang_cfg = languages.get(lang, {})
+    return str(lang_cfg.get("rules_file", settings().get("rules_file", "rules/c-memory.yml")))
 
 
 def get_root(project: str) -> Path:
@@ -27,7 +53,7 @@ def safe_file(project: str, relative_path: str) -> Path:
     candidate = (root / relative_path).resolve(strict=True)
     if not candidate.is_relative_to(root):
         raise ValueError("Path escapes registered project root")
-    allowed = set(settings().get("allowed_extensions", [".c", ".h"]))
+    allowed = get_allowed_extensions(project)
     if candidate.suffix not in allowed:
         raise ValueError("File extension is not allowed")
     if not candidate.is_file():
@@ -55,7 +81,7 @@ def project_info(project: str) -> dict:
 def list_source_files(project: str, limit: int = 200) -> dict:
     """List registered C/C++ source files. Does not follow symlinks."""
     root = get_root(project)
-    allowed = set(settings().get("allowed_extensions", [".c", ".h", ".cc", ".cpp", ".hpp"]))
+    allowed = get_allowed_extensions(project)
     limit = max(1, min(int(limit), 1000))
     found: list[str] = []
     for path in root.rglob("*"):
@@ -75,7 +101,7 @@ def search_source(project: str, pattern: str, limit: int = 50) -> dict:
         regex = re.compile(pattern)
     except re.error as exc:
         raise ValueError(f"Invalid regular expression: {exc}") from exc
-    allowed = set(settings().get("allowed_extensions", [".c", ".h", ".cc", ".cpp", ".hpp"]))
+    allowed = get_allowed_extensions(project)
     max_bytes = int(settings().get("max_file_bytes", 2_000_000))
     limit = max(1, min(int(limit), int(settings().get("max_search_results", 100))))
     results = []
@@ -152,7 +178,7 @@ def iter_source_files(root: Path, allowed: set[str], max_bytes: int):
 def function_search(project: str, keyword: str, limit: int = 50) -> dict:
     """Search for C/C++ function definitions matching a keyword in name or body."""
     root = get_root(project)
-    allowed = set(settings().get("allowed_extensions", [".c", ".h", ".cc", ".cpp", ".hpp"]))
+    allowed = get_allowed_extensions(project)
     max_bytes = int(settings().get("max_file_bytes", 2_000_000))
     limit = max(1, min(int(limit), 500))
     results = []

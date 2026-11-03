@@ -59,7 +59,11 @@ def codeql_database_create(project: str, overwrite: bool = False) -> dict:
         raise ValueError("Project must define a build_command in projects.yaml")
     cfg = codeql_settings()
     binary = str(cfg.get("binary", "codeql"))
-    language = str(project_cfg.get("language") or cfg.get("language", "cpp"))
+    from vulnforge.mcp_servers.source_server import get_language
+    lang = get_language(project)
+    languages_cfg = load_yaml(BASE / "config/languages.yaml").get("languages", {}) if (BASE / "config/languages.yaml").is_file() else {}
+    codeql_lang = languages_cfg.get(lang, {}).get("codeql_language", "cpp")
+    language = str(project_cfg.get("language") or codeql_lang or cfg.get("language", "cpp"))
     if language not in {"cpp", "c", "java", "python", "go"}:
         raise ValueError("Unsupported CodeQL language")
     timeout = max(60, min(int(cfg.get("create_timeout_seconds", 1800)), 7200))

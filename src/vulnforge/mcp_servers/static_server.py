@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from vulnforge.config import load_yaml, project_root
+from vulnforge.config import load_yaml, override_config, project_root
 
 mcp = FastMCP("vulnforge-static")
 BASE = Path(os.getenv("VULNFORGE_HOME", ".")).resolve()
@@ -21,10 +21,11 @@ def semgrep_scan(project: str, rules_file: str | None = None) -> dict:
 
     The executable and timeout are configuration-controlled. No arbitrary shell is accepted.
     """
-    root = project_root(project, PROJECTS_CONFIG)
+    root = project_root(project, override_config(PROJECTS_CONFIG))
     cfg = load_yaml(SETTINGS_CONFIG).get("static", {})
     binary = str(cfg.get("semgrep_binary", "semgrep"))
-    configured_rules = str(cfg.get("rules_file", "rules/c-memory.yml"))
+    from vulnforge.mcp_servers.source_server import get_rules_file
+    configured_rules = get_rules_file(project) if rules_file is None else str(cfg.get("rules_file", "rules/c-memory.yml"))
     rules_arg = Path(rules_file or configured_rules)
     rules = (rules_arg if rules_arg.is_absolute() else BASE / rules_arg).resolve()
     allowed_rules_root = (BASE / "rules").resolve()

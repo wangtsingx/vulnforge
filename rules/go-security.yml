@@ -1,0 +1,83 @@
+rules:
+  - id: vulnforge.go.ssrf-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review whether the URL is constructed from user-controlled input.
+      Validate scheme, host, and port against an allowlist before making requests.
+    patterns:
+      - pattern-either:
+          - pattern: http.Get($URL)
+          - pattern: http.Post($URL, ...)
+          - pattern: http.NewRequest($METHOD, $URL, ...)
+          - pattern: $CLIENT.Get($URL)
+
+  - id: vulnforge.go.path-traversal-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review whether the file path is built from user input without
+      filepath.Clean and boundary validation. Check for ".." segments.
+    patterns:
+      - pattern-either:
+          - pattern: os.Open($PATH)
+          - pattern: os.ReadFile($PATH)
+          - pattern: os.Create($PATH)
+          - pattern: ioutil.ReadFile($PATH)
+
+  - id: vulnforge.go.unsafe-pointer-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review unsafe.Pointer usage for type confusion, alignment, and
+      lifetime issues. Avoid unsafe unless absolutely necessary.
+    pattern: unsafe.Pointer($X)
+
+  - id: vulnforge.go.command-injection-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review whether command arguments contain user-controlled input.
+      Prefer exec.Command with separate arguments over shell strings.
+    patterns:
+      - pattern-either:
+          - pattern: exec.Command($CMD, ...)
+          - pattern: exec.CommandContext($CTX, $CMD, ...)
+
+  - id: vulnforge.go.sql-injection-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review whether SQL queries are built with string concatenation or
+      fmt.Sprintf instead of parameterized queries.
+    patterns:
+      - pattern-either:
+          - pattern: $DB.Query(fmt.Sprintf(...))
+          - pattern: $DB.Exec(fmt.Sprintf(...))
+          - pattern: $DB.Query("..." + $VAR + "...")
+          - pattern: $DB.Exec("..." + $VAR + "...")
+
+  - id: vulnforge.go.hardcoded-secret-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review whether this is a hardcoded credential. Use environment
+      variables or a secrets manager instead.
+    patterns:
+      - pattern-either:
+          - pattern: $VAR = "password"
+          - pattern: $VAR = "secret"
+          - pattern: $VAR = "api_key"
+          - pattern: $VAR = "token"
+
+  - id: vulnforge.go.deserialization-review
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Review whether deserialization of untrusted data is safe. Validate
+      input before unmarshalling, especially with gob or custom decoders.
+    patterns:
+      - pattern-either:
+          - pattern: yaml.Unmarshal($DATA, $DEST)
+          - pattern: json.Unmarshal($DATA, $DEST)
+          - pattern: gob.NewDecoder($READER).Decode($DEST)

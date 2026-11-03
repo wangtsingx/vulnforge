@@ -1,0 +1,56 @@
+rules:
+  - id: vulnforge.rust.unsafe-block-review
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Review unsafe blocks for memory safety invariants. Ensure pointer
+      dereference, transmute, and FFI calls are properly validated.
+    pattern: unsafe { ... }
+
+  - id: vulnforge.rust.unwrap-review
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Review unwrap/expect calls on untrusted input. Prefer ? operator
+      or explicit error handling to prevent panics from malformed input.
+    patterns:
+      - pattern-either:
+          - pattern: $X.unwrap()
+          - pattern: $X.expect($MSG)
+
+  - id: vulnforge.rust.integer-cast-review
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Review as casts between integer types for truncation or sign
+      issues. Use TryFrom or checked arithmetic for untrusted values.
+    patterns:
+      - pattern-either:
+          - pattern: $X as usize
+          - pattern: $X as u32
+          - pattern: $X as i32
+          - pattern: $X as u16
+          - pattern: $X as i16
+
+  - id: vulnforge.rust.command-injection-review
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Review whether command arguments contain user-controlled input.
+      Use argument arrays instead of shell strings.
+    patterns:
+      - pattern-either:
+          - pattern: Command::new($CMD).args(...)
+          - pattern: Command::new($CMD).arg($ARG)
+
+  - id: vulnforge.rust.path-traversal-review
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Review file path construction from user input. Check for ".."
+      components after normalization.
+    patterns:
+      - pattern-either:
+          - pattern: File::open($PATH)
+          - pattern: File::create($PATH)
+          - pattern: fs::read_to_string($PATH)
