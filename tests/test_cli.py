@@ -65,3 +65,18 @@ def test_update(project_dir):
     data = yaml.safe_load(Path("config/projects.yaml").read_text())
     assert data["projects"]["demo"]["path"] == str(new_src)
     assert data["projects"]["demo"]["revision"] == "abc123"
+
+
+def test_doctor_reports_missing(capsys, monkeypatch, tmp_path):
+    from vulnforge import cli
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/projects.yaml").write_text("projects: {}\n")
+    (tmp_path / "config/settings.yaml").write_text("tasks: {}\n")
+    # no semgrep/codeql on PATH, empty projects -> all base checks should pass except binaries
+    with pytest.raises(SystemExit):
+        cli.cmd_doctor(type("Args", (), {})())
+    output = capsys.readouterr().out
+    assert "config/projects.yaml" in output
+    assert "semgrep" in output

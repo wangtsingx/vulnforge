@@ -101,6 +101,185 @@ if __name__ == "__main__":
 
 
 @mcp.tool()
+def audit_status(task_id: str) -> dict:
+    """Return a one-call snapshot of task status, coverage summary, and finding counts."""
+    task = load_task(task_id, SETTINGS_CONFIG)
+    from vulnforge.coverage import load_ledger
+    from vulnforge.findings import list_findings
+
+    project_id = str(task.get("project_id", ""))
+    all_findings = [f for f in list_findings(SETTINGS_CONFIG) if f["project_id"] == project_id]
+    linked_finding_ids = set(task.get("findings", []))
+
+    status_counts: dict[str, int] = {}
+    for item in all_findings:
+        status = str(item.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    try:
+        ledger = load_ledger(task_id, SETTINGS_CONFIG)
+        coverage = coverage_summary(ledger)
+    except FileNotFoundError:
+        ledger = []
+        coverage = {"total": 0, "note": "no coverage ledger yet"}
+
+    orphan_units = 0
+    if ledger:
+        known_fingerprints = {f["fingerprint"] for f in all_findings if f.get("fingerprint")}
+        for unit in ledger:
+            if unit.get("status") == "candidate":
+                orphans = [fp for fp in unit.get("result_fingerprints", []) if fp not in known_fingerprints]
+                if orphans:
+                    orphan_units += 1
+
+    return {
+        "task_id": task_id,
+        "status": task.get("status"),
+        "title": task.get("title"),
+        "project_id": project_id,
+        "coverage_summary": coverage,
+        "finding_status_counts": status_counts,
+        "total_findings": len(all_findings),
+        "findings_linked_to_task": len([f for f in all_findings if f["finding_id"] in linked_finding_ids]),
+        "orphan_candidate_units": orphan_units,
+    }
+
+
+@mcp.tool()
+def import_scan_results(project: str, task_id: str, scan_output: dict) -> dict:
+    """Turn raw Semgrep scan results into hypothesis findings with deduplication.
+
+    Groups results by (path, check_id), generates stable fingerprints, creates
+    hypothesis findings and planned coverage units. Existing fingerprints return
+    the existing finding_id without creating duplicates.
+    """
+    load_task(task_id, SETTINGS_CONFIG)
+    from vulnforge.coverage import coverage_id_from_refs
+    from vulnforge.findings import list_findings, new_finding_id, save_finding
+
+    raw_results = scan_output.get("findings", [])
+    if not isinstance(raw_results, list):
+        raise TypeError("scan_output.findings must be a list")
+    from vulnforge.config import load_yaml
+    max_import = int(load_yaml(SETTINGS_CONFIG).get("coverage", {}).get("max_scan_import", 500))
+    if len(raw_results) > max_import:
+        raise ValueError(f"scan_output.findings exceeds max_scan_import limit ({max_import})")
+
+    # Group by (path, check_id)
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for result in raw_results:
+        path = str(result.get("path") or result.get("location", {}).get("path", "unknown"))
+        check_id = str(result.get("check_id") or "unknown")
+        groups.setdefault((path, check_id), []).append(result)
+
+    known = {f["finding_id"]: f for f in list_findings(SETTINGS_CONFIG) if f["project_id"] == project}
+    known_by_fp = {f["fingerprint"]: f for f in known.values() if f.get("fingerprint")}
+
+    created_findings: list[str] = []
+    existing_findings: list[str] = []
+    created_units: list[str] = []
+    existing_units: list[str] = []
+    all_fingerprints: list[str] = []
+
+    try:
+        ledger = load_ledger(task_id, SETTINGS_CONFIG)
+    except FileNotFoundError:
+        ledger = []
+
+    for (path, check_id), items in sorted(groups.items()):
+        vuln_class = check_id
+        func_names = {str(item.get("extra", {}).get("metavars", {}).get("$FUNC", "")) for item in items}
+        func_names.discard("")
+        function = next(iter(func_names)) if len(func_names) == 1 else None
+        line_start = min(int(item.get("start", {}).get("line", 1)) for item in items)
+        line_end = max(int(item.get("end", {}).get("line", line_start)) for item in items)
+
+        from vulnforge.fingerprint import finding_fingerprint
+
+        fingerprint = finding_fingerprint(project, path, vuln_class, function or "")
+
+        # Finding dedup
+        if fingerprint in known_by_fp:
+            existing_findings.append(known_by_fp[fingerprint]["finding_id"])
+            all_fingerprints.append(fingerprint)
+        else:
+            finding_id = new_finding_id()
+            finding = {
+                "finding_id": finding_id,
+                "project_id": project,
+                "status": "hypothesis",
+                "title": f"Semgrep: {check_id} in {path}",
+                "cwe": check_id,
+                "location": {
+                    "file": path,
+                    "function": function,
+                    "line_start": line_start,
+                    "line_end": line_end,
+                },
+                "evidence": [
+                    {
+                        "kind": "semgrep",
+                        "check_id": check_id,
+                        "path": path,
+                        "line": item.get("start", {}).get("line"),
+                        "message": str(item.get("extra", {}).get("message", ""))[:500],
+                    }
+                    for item in items[:10]
+                ],
+            }
+            save_finding(finding, SETTINGS_CONFIG)
+            created_findings.append(finding_id)
+            known_by_fp[fingerprint] = {"finding_id": finding_id, "fingerprint": fingerprint}
+            all_fingerprints.append(fingerprint)
+
+        # Coverage unit dedup
+        subsystem = str(Path(path).parent) if Path(path).parent != Path(".") else "root"
+        refs = {
+            "surface": f"{path}#{function or 'module'}",
+            "boundary": f"static:{check_id}",
+            "subsystem": subsystem,
+            "attack_class": check_id,
+        }
+        cid = coverage_id_from_refs(refs)
+        unit_exists = any(u.get("coverage_id") == cid for u in ledger)
+        if not unit_exists:
+            unit = {
+                "coverage_id": cid,
+                "canonical_refs": refs,
+                "surface": f"{path} ({function or 'module'})",
+                "boundary": f"static rule {check_id}",
+                "subsystem": subsystem,
+                "attack_class": check_id,
+                "starting_paths": [str(Path(path).parent) if Path(path).parent != Path(".") else "."],
+                "status": "planned",
+                "owner": None,
+                "reviewed_paths": [],
+                "local_checks": [],
+                "result_fingerprints": [],
+                "unresolved": [],
+            }
+            ledger.append(unit)
+            created_units.append(cid)
+        else:
+            existing_units.append(cid)
+
+    if created_units or existing_units:
+        save_ledger(ledger, task_id, SETTINGS_CONFIG)
+
+    return {
+        "project": project,
+        "task_id": task_id,
+        "groups": len(groups),
+        "created_findings": created_findings,
+        "existing_findings": existing_findings,
+        "created_coverage_units": created_units,
+        "existing_coverage_units": existing_units,
+        "fingerprints": all_fingerprints,
+        "note": "All imported findings are hypothesis status; review each before promoting to candidate.",
+    }
+
+
+@mcp.tool()
 def create_coverage_unit(
     task_id: str,
     surface_ref: str,

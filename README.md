@@ -63,7 +63,35 @@ Optional environment overrides:
 
 Findings and reports are constrained to configured roots under `VULNFORGE_HOME`.
 
-## 4. Run MCP servers
+## 4. Agent guide
+
+If you are an AI agent (Codex, Claude, etc.) operating this project, read
+`AGENTS.md` first. It defines the authorization boundary, the recommended tool
+call order, and the error handling rules.
+
+Check runtime health before starting:
+
+```bash
+uv run vulnforge doctor
+```
+
+Get a one-call status snapshot for any task:
+
+```
+audit_status(task_id=...)
+```
+
+Import raw Semgrep results into hypothesis findings with fingerprint
+deduplication and auto-created coverage units:
+
+```
+import_scan_results(project=..., task_id=..., scan_output=...)
+```
+
+All imported findings start as `hypothesis`; review each before promoting to
+`candidate`.
+
+## 5. Run MCP servers
 
 Run each server from the repository root:
 

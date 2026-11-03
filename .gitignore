@@ -7,3 +7,6 @@ __pycache__/
 work/
 findings/
 reports/
+tasks/
+coverage/
+databases/

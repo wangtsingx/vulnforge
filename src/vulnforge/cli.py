@@ -91,6 +91,49 @@ def cmd_update(args: argparse.Namespace) -> None:
     print(f"Updated project: {args.project}")
 
 
+def cmd_doctor(_args: argparse.Namespace) -> None:
+    """Check runtime dependencies and configuration health."""
+    import shutil
+
+    checks: list[tuple[str, bool, str]] = []
+
+    py_ok = sys.version_info >= (3, 11)
+    checks.append(("python>=3.11", py_ok, ".".join(map(str, sys.version_info[:3]))))
+
+    semgrep = shutil.which("semgrep")
+    checks.append(("semgrep", semgrep is not None, semgrep or "not found in PATH"))
+
+    codeql = shutil.which("codeql")
+    checks.append(("codeql", codeql is not None, codeql or "not found in PATH (optional)"))
+
+    projects_file = PROJECTS_FILE
+    projects_ok = projects_file.is_file()
+    checks.append(("config/projects.yaml", projects_ok, "exists" if projects_ok else "missing"))
+
+    settings_file = Path("config/settings.yaml")
+    settings_ok = settings_file.is_file()
+    checks.append(("config/settings.yaml", settings_ok, "exists" if settings_ok else "missing"))
+
+    if projects_ok:
+        data = load_yaml(projects_file)
+        for name, cfg in data.get("projects", {}).items():
+            path = Path(cfg.get("path", ""))
+            exists = path.expanduser().resolve().is_dir()
+            checks.append((f"project:{name}", exists, str(path)))
+
+    failed = 0
+    for name, ok, detail in checks:
+        marker = "OK" if ok else "MISS"
+        if not ok:
+            failed += 1
+        print(f"  [{marker}] {name}: {detail}")
+
+    if failed:
+        print(f"\n{failed} check(s) failed. Install missing dependencies or fix configuration.")
+        sys.exit(1)
+    print("\nAll checks passed.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="vulnforge", description="Manage VulnForge project registrations")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -117,6 +160,9 @@ def main() -> None:
     p_update.add_argument("--build-command", dest="build_command")
     p_update.add_argument("--language")
     p_update.set_defaults(func=cmd_update)
+
+    p_doctor = sub.add_parser("doctor", help="Check runtime dependencies and configuration")
+    p_doctor.set_defaults(func=cmd_doctor)
 
     args = parser.parse_args()
     args.func(args)
