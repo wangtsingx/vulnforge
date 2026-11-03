@@ -1,0 +1,27 @@
+rules:
+  - id: vulnforge.suspicious-unbounded-copy
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review whether the destination has sufficient capacity and whether
+      the source is attacker-controlled. This pattern alone is not proof
+      of a vulnerability.
+    patterns:
+      - pattern-either:
+          - pattern: strcpy($DST, $SRC)
+          - pattern: strcat($DST, $SRC)
+
+  - id: vulnforge.untrusted-format-string-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review whether the format string is controlled by untrusted input.
+      A non-literal format string is not automatically exploitable.
+    pattern: printf($FMT, ...)
+
+  - id: vulnforge.allocation-multiplication-review
+    languages: [c]
+    severity: WARNING
+    message: >-
+      Review multiplication overflow and validate bounds before allocation.
+    pattern: malloc($SIZE * $COUNT)

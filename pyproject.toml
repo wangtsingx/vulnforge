@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vulnforge"
+version = "0.1.0"
+description = "MCP-based Linux C/C++ source security research MVP"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.28,<2",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+vulnforge-source = "vulnforge.mcp_servers.source_server:main"
+vulnforge-static = "vulnforge.mcp_servers.static_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

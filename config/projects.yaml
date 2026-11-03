@@ -1,0 +1,6 @@
+# Only projects explicitly listed here can be accessed by the MCP servers.
+projects:
+  nginx:
+    path: /opt/vulnforge/source/nginx
+    description: Nginx source tree for authorized local research
+    revision: ""

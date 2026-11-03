@@ -1,0 +1,11 @@
+source:
+  allowed_extensions: [".c", ".h", ".cc", ".cpp", ".hpp"]
+  max_read_lines: 300
+  max_search_results: 100
+  max_file_bytes: 2000000
+
+static:
+  semgrep_binary: semgrep
+  rules_file: rules/c-memory.yml
+  timeout_seconds: 300
+  max_output_bytes: 5000000
