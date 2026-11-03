@@ -4,3 +4,8 @@ projects:
     path: /opt/vulnforge/source/nginx
     description: Nginx source tree for authorized local research
     revision: ""
+  mini-httpd:
+    path: ./examples/mini-httpd/src
+    description: Deliberately vulnerable mini HTTP handler for end-to-end testing
+    revision: ""
+    language: c
