@@ -47,3 +47,6 @@ fuzzing:
 
 tasks:
   tasks_dir: tasks
+
+coverage:
+  ledger_dir: coverage

@@ -8,7 +8,18 @@
     "project_id": {"type": "string"},
     "status": {
       "type": "string",
-      "enum": ["hypothesis", "candidate", "unconfirmed", "confirmed", "rejected"]
+      "enum": ["hypothesis", "candidate", "unconfirmed", "confirmed", "rejected", "needs_validation"]
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+    },
+    "coverage_id": {
+      "type": "string",
+      "maxLength": 1600
+    },
+    "blocked_reason": {
+      "type": ["string", "null"]
     },
     "title": {"type": "string"},
     "cwe": {"type": ["string", "null"]},

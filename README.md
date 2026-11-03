@@ -161,7 +161,8 @@ Language definitions are in `config/languages.yaml`.
 5. Run `semgrep_scan` and treat results only as candidate leads.
 6. Save evidence-based records with `create_finding`.
 7. Call `generate_report` to produce `reports/<project>/report.md`.
-8. Separate confirmed facts, inferences, and unverified hypotheses.
+8. Use coverage MCP tools to track audited surfaces, boundaries, subsystems, and attack classes.
+9. Separate confirmed facts, inferences, and unverified hypotheses.
 
 ## 8. Finding model
 
@@ -185,6 +186,30 @@ Minimum structure:
   ]
 }
 ```
+
+Finding records also carry a stable `fingerprint` derived from the project, source location,
+and vulnerability class. Saving a different finding with the same fingerprint is rejected to
+prevent duplicate root causes. `needs_validation` is reserved for a source-grounded candidate
+with a specific unresolved blocker; it must not receive severity.
+
+## 9. Coverage ledger
+
+Each research task can own a coverage ledger at `coverage/<task_id>.json`. A unit records a
+surface, trust boundary, subsystem, attack class, starting paths, owner, reviewed paths,
+local checks, result fingerprints, and unresolved reasons. `coverage_id` is derived from
+canonical source references, and the ledger validator enforces duplicate IDs and state
+invariants.
+
+Coverage statuses:
+
+| Status | Meaning |
+|---|---|
+| `planned` | Seeded, no owner or evidence |
+| `in_progress` | Assigned, evidence not yet recorded |
+| `covered` | Reviewed with local/source checks, no candidate |
+| `candidate` | Reviewed and linked to one or more finding fingerprints |
+| `blocked` | Partial evidence with a specific unresolved blocker |
+| `deferred`, `out_of_scope`, `not_applicable` | Explicit gaps, never treated as covered |
 
 `confirmed` status requires reproducible verification evidence and human review.
 

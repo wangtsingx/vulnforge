@@ -10,6 +10,7 @@ from typing import Any
 import jsonschema
 
 from vulnforge.config import load_yaml
+from vulnforge.fingerprint import FINGERPRINT_RE, normalize_finding_fingerprint
 from vulnforge.paths import findings_root
 
 FINDING_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -31,10 +32,35 @@ def validate_finding(finding: dict[str, Any], schema_file: str | Path | None = N
         raise ValueError("Invalid finding_id")
     if not PROJECT_ID_RE.fullmatch(str(finding.get("project_id", ""))):
         raise ValueError("Invalid project_id")
+    fingerprint = normalize_finding_fingerprint(finding)
+    if not FINGERPRINT_RE.fullmatch(fingerprint):
+        raise ValueError("Invalid fingerprint")
 
 
 def finding_file(root: Path, finding_id: str) -> Path:
     return (root / f"{finding_id}.json").resolve()
+
+
+def find_duplicate_fingerprint(
+    fingerprint: str,
+    finding_id: str,
+    settings_path: str | Path,
+    root: Path | None = None,
+) -> str | None:
+    """Return the finding_id of a different record using the same fingerprint."""
+    root = root or findings_root(settings_path)
+    for path in root.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        try:
+            other = normalize_finding_fingerprint(data)
+        except ValueError:
+            continue
+        if other == fingerprint and data.get("finding_id") != finding_id:
+            return str(data.get("finding_id"))
+    return None
 
 
 def save_finding(finding: dict[str, Any], settings_path: str | Path) -> dict[str, Any]:
@@ -49,6 +75,12 @@ def save_finding(finding: dict[str, Any], settings_path: str | Path) -> dict[str
         raise ValueError("Invalid finding path")
     if not path.exists() and len(existing) >= limit:
         raise ValueError(f"Finding store is full ({limit})")
+    fingerprint = normalize_finding_fingerprint(finding)
+    finding = dict(finding)
+    finding["fingerprint"] = fingerprint
+    duplicate = find_duplicate_fingerprint(fingerprint, str(finding["finding_id"]), settings_path, root)
+    if duplicate:
+        raise ValueError(f"Duplicate finding fingerprint already exists: {duplicate}")
     record = dict(finding)
     now = datetime.now(UTC).isoformat()
     if path.exists():
@@ -90,6 +122,7 @@ def list_findings(settings_path: str | Path) -> list[dict[str, Any]]:
                 "status": data["status"],
                 "title": data["title"],
                 "severity": data.get("severity", "unknown"),
+                "fingerprint": data.get("fingerprint"),
                 "updated_at": data.get("updated_at"),
             }
         )

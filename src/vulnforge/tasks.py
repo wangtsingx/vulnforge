@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-TASK_ID_RE = __import__("re").compile(r"^task-[A-Za-z0-9-]{1,128}$")
+TASK_ID_RE = re.compile(r"^task-[A-Za-z0-9-]{1,128}$")
 
 VALID_STATUS = {
     "created",
@@ -114,4 +115,15 @@ def transition_task(task_id: str, new_status: str, settings_path: str | Path) ->
         if not verification.get("reproducible") or not verification.get("human_reviewed"):
             raise ValueError("Confirmed status requires reproducible evidence and human_reviewed=true")
     task["status"] = new_status
+    return save_task(task, settings_path)
+
+
+def task_coverage_summary(task_id: str, settings_path: str | Path) -> dict[str, Any]:
+    """Load a task's coverage ledger and return a status summary."""
+    from vulnforge.coverage import coverage_summary, load_ledger
+
+    task = load_task(task_id, settings_path)
+    records = load_ledger(task_id, settings_path)
+    summary = coverage_summary(records)
+    task["coverage_summary"] = summary
     return save_task(task, settings_path)

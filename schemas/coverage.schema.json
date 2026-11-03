@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VulnForge Coverage Ledger",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "coverage_id",
+      "canonical_refs",
+      "surface",
+      "boundary",
+      "subsystem",
+      "attack_class",
+      "starting_paths",
+      "status",
+      "owner",
+      "reviewed_paths",
+      "local_checks",
+      "result_fingerprints",
+      "unresolved"
+    ],
+    "additionalProperties": true,
+    "properties": {
+      "coverage_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1600
+      },
+      "canonical_refs": {
+        "type": "object",
+        "required": ["surface", "boundary", "subsystem", "attack_class"],
+        "additionalProperties": false,
+        "properties": {
+          "surface": {"$ref": "#/$defs/canonicalRef"},
+          "boundary": {"$ref": "#/$defs/canonicalRef"},
+          "subsystem": {"$ref": "#/$defs/canonicalRef"},
+          "attack_class": {"$ref": "#/$defs/canonicalRef"},
+          "lifecycle": {"$ref": "#/$defs/canonicalRef"}
+        }
+      },
+      "surface": {"$ref": "#/$defs/label"},
+      "boundary": {"$ref": "#/$defs/label"},
+      "subsystem": {"$ref": "#/$defs/label"},
+      "attack_class": {"$ref": "#/$defs/label"},
+      "starting_paths": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {"$ref": "#/$defs/repoPath"}
+      },
+      "status": {
+        "type": "string",
+        "enum": ["planned", "not_applicable", "out_of_scope", "in_progress", "covered", "candidate", "blocked", "deferred"]
+      },
+      "owner": {
+        "anyOf": [
+          {"type": "null"},
+          {"$ref": "#/$defs/ownerId"}
+        ]
+      },
+      "reviewed_paths": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {"$ref": "#/$defs/repoPath"}
+      },
+      "local_checks": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "required": ["agent_id", "reviewed_paths"],
+          "additionalProperties": true,
+          "properties": {
+            "agent_id": {"$ref": "#/$defs/ownerId"},
+            "reviewed_paths": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/repoPath"}
+            }
+          }
+        }
+      },
+      "result_fingerprints": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+        }
+      },
+      "unresolved": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    }
+  },
+  "$defs": {
+    "canonicalRef": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 300,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "repoPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^(?!/)(?!\\.\\./)[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "ownerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+    }
+  }
+}

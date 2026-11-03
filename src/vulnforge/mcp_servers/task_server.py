@@ -6,12 +6,19 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from vulnforge.config import override_config, project_root
+from vulnforge.coverage import (
+    coverage_id_from_refs,
+    coverage_summary,
+    load_ledger,
+    save_ledger,
+)
 from vulnforge.tasks import (
     VALID_STATUS,
     list_tasks,
     load_task,
     new_task_id,
     save_task,
+    task_coverage_summary,
     transition_task,
 )
 
@@ -91,3 +98,110 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+@mcp.tool()
+def create_coverage_unit(
+    task_id: str,
+    surface_ref: str,
+    boundary_ref: str,
+    subsystem_ref: str,
+    attack_class_ref: str,
+    surface: str,
+    boundary: str,
+    subsystem: str,
+    attack_class: str,
+    starting_path: str,
+    lifecycle_ref: str = "",
+) -> dict:
+    """Create and append one deterministic coverage unit to a task ledger."""
+    load_task(task_id, SETTINGS_CONFIG)
+    refs = {
+        "surface": surface_ref,
+        "boundary": boundary_ref,
+        "subsystem": subsystem_ref,
+        "attack_class": attack_class_ref,
+    }
+    if lifecycle_ref:
+        refs["lifecycle"] = lifecycle_ref
+    unit = {
+        "coverage_id": coverage_id_from_refs(refs),
+        "canonical_refs": refs,
+        "surface": surface[:500],
+        "boundary": boundary[:500],
+        "subsystem": subsystem[:500],
+        "attack_class": attack_class[:500],
+        "starting_paths": [starting_path],
+        "status": "planned",
+        "owner": None,
+        "reviewed_paths": [],
+        "local_checks": [],
+        "result_fingerprints": [],
+        "unresolved": [],
+    }
+    try:
+        records = load_ledger(task_id, SETTINGS_CONFIG)
+    except FileNotFoundError:
+        records = []
+    if any(record.get("coverage_id") == unit["coverage_id"] for record in records):
+        raise ValueError("Coverage unit already exists")
+    records.append(unit)
+    save_ledger(records, task_id, SETTINGS_CONFIG)
+    return unit
+
+
+@mcp.tool()
+def update_coverage_unit(
+    task_id: str,
+    coverage_id: str,
+    status: str,
+    owner: str | None = None,
+    reviewed_paths: list[str] | None = None,
+    local_checks: list[dict] | None = None,
+    result_fingerprints: list[str] | None = None,
+    unresolved: list[str] | None = None,
+) -> dict:
+    """Replace the live state of one coverage unit and validate the whole ledger."""
+    records = load_ledger(task_id, SETTINGS_CONFIG)
+    for record in records:
+        if record.get("coverage_id") == coverage_id:
+            record["status"] = status
+            record["owner"] = owner
+            record["reviewed_paths"] = list(reviewed_paths or [])
+            record["local_checks"] = list(local_checks or [])
+            record["result_fingerprints"] = list(result_fingerprints or [])
+            record["unresolved"] = list(unresolved or [])
+            save_ledger(records, task_id, SETTINGS_CONFIG)
+            return task_coverage_summary(task_id, SETTINGS_CONFIG)
+    raise ValueError(f"Coverage unit not found: {coverage_id}")
+
+
+@mcp.tool()
+def link_finding_to_coverage(task_id: str, coverage_id: str, fingerprint: str) -> dict:
+    """Link a finding fingerprint to a candidate coverage unit."""
+    records = load_ledger(task_id, SETTINGS_CONFIG)
+    for record in records:
+        if record.get("coverage_id") == coverage_id:
+            if record.get("status") != "candidate":
+                raise ValueError("Findings can only be linked to candidate coverage units")
+            fingerprints = set(record.get("result_fingerprints", []))
+            fingerprints.add(fingerprint)
+            record["result_fingerprints"] = sorted(fingerprints)
+            save_ledger(records, task_id, SETTINGS_CONFIG)
+            return task_coverage_summary(task_id, SETTINGS_CONFIG)
+    raise ValueError(f"Coverage unit not found: {coverage_id}")
+
+
+@mcp.tool()
+def coverage_summary_for_task(task_id: str) -> dict:
+    """Return a validated coverage summary and update it onto the research task."""
+    task = load_task(task_id, SETTINGS_CONFIG)
+    records = load_ledger(task_id, SETTINGS_CONFIG)
+    task["coverage_summary"] = coverage_summary(records)
+    return {"task_id": task_id, **task_coverage_summary(task_id, SETTINGS_CONFIG)["coverage_summary"]}
+
+
+@mcp.tool()
+def get_coverage_ledger(task_id: str) -> dict:
+    """Load and validate one task coverage ledger."""
+    return {"task_id": task_id, "units": load_ledger(task_id, SETTINGS_CONFIG)}
