@@ -2,13 +2,30 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "VulnForge Finding",
   "type": "object",
-  "required": ["finding_id", "project_id", "status", "title", "evidence"],
+  "required": [
+    "finding_id",
+    "project_id",
+    "status",
+    "title",
+    "evidence"
+  ],
   "properties": {
-    "finding_id": {"type": "string"},
-    "project_id": {"type": "string"},
+    "finding_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
     "status": {
       "type": "string",
-      "enum": ["hypothesis", "candidate", "unconfirmed", "confirmed", "rejected", "needs_validation"]
+      "enum": [
+        "hypothesis",
+        "candidate",
+        "unconfirmed",
+        "confirmed",
+        "rejected",
+        "needs_validation"
+      ]
     },
     "fingerprint": {
       "type": "string",
@@ -19,43 +36,135 @@
       "maxLength": 1600
     },
     "blocked_reason": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 10,
       "maxLength": 2000
     },
     "validation_plan": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "properties": {
-        "local": {"type": "string"},
-        "deployment": {"type": "string"},
-        "required_permission": {"type": "string"}
+        "local": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "required_permission": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "expected_result": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        }
       },
       "additionalProperties": false
     },
-    "title": {"type": "string"},
-    "cwe": {"type": ["string", "null"]},
+    "title": {
+      "type": "string"
+    },
+    "cwe": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "severity": {
       "type": "string",
-      "enum": ["unknown", "info", "low", "medium", "high", "critical"]
+      "enum": [
+        "unknown",
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
     },
     "location": {
       "type": "object",
       "properties": {
-        "revision": {"type": "string"},
-        "file": {"type": "string"},
-        "function": {"type": ["string", "null"]},
-        "line_start": {"type": "integer"},
-        "line_end": {"type": "integer"}
+        "revision": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "function": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line_start": {
+          "type": "integer"
+        },
+        "line_end": {
+          "type": "integer"
+        }
       }
     },
-    "evidence": {"type": "array", "items": {"type": "object"}},
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "verification": {
       "type": "object",
       "properties": {
-        "status": {"type": "string"},
-        "reproducible": {"type": "boolean"},
-        "security_impact": {"type": ["string", "null"]}
+        "status": {
+          "type": "string"
+        },
+        "reproducible": {
+          "type": "boolean"
+        },
+        "security_impact": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
+    },
+    "analysis": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "overview": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "root_cause": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "impact_scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        }
+      },
+      "required": [
+        "overview",
+        "root_cause",
+        "impact_scope"
+      ],
+      "additionalProperties": false
     }
   }
 }

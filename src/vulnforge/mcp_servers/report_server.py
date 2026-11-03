@@ -82,12 +82,31 @@ def _finding_section(record: dict, full: dict) -> list[str]:
         lines.append(f"- Coverage: `{record['coverage_id']}`")
     if record.get("blocked_reason"):
         lines.append(f"- Blocked reason: {record['blocked_reason']}")
+    analysis = full.get("analysis")
+    if analysis:
+        lines.extend(
+            [
+                "",
+                "#### Analysis",
+                "",
+                f"- Overview: {analysis.get('overview', '')}",
+                f"- Root cause: {analysis.get('root_cause', '')}",
+                f"- Impact scope: {analysis.get('impact_scope', '')}",
+            ]
+        )
     validation_plan = full.get("validation_plan")
     if validation_plan:
-        lines.append("- Validation plan:")
+        lines.append("")
+        lines.append("#### Reproduction")
+        lines.append("")
+        if validation_plan.get("steps"):
+            lines.append(validation_plan["steps"])
         for key in ("local", "deployment", "required_permission"):
             if validation_plan.get(key):
-                lines.append(f"  - {key}: {validation_plan[key]}")
+                lines.append(f"- {key.replace(chr(95), chr(32)).capitalize()}: {validation_plan[key]}")
+        if validation_plan.get("expected_result"):
+            lines.append(f"- Expected result: {validation_plan['expected_result']}")
+        lines.append("")
     evidence = full.get("evidence", [])
     lines.append(f"- Evidence items: {len(evidence)}")
     lines.append("")
