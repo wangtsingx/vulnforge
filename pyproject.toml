@@ -1,26 +1,41 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9,<0.10"]
+build-backend = "uv_build"
 
 [project]
 name = "vulnforge"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP-based Linux C/C++ source security research MVP"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "mcp>=1.28,<2",
+  "mcp>=1.18,<2",
   "PyYAML>=6.0",
+  "jsonschema>=4.23,<5",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+]
 
 [project.scripts]
 vulnforge-source = "vulnforge.mcp_servers.source_server:main"
 vulnforge-static = "vulnforge.mcp_servers.static_server:main"
+vulnforge-patch = "vulnforge.mcp_servers.patch_server:main"
+vulnforge-report = "vulnforge.mcp_servers.report_server:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.uv]
+package = true
+
+[tool.uv.build-backend]
+module-name = "vulnforge"
+module-root = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

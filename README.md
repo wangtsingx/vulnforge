@@ -2,58 +2,77 @@
 
 MCP-based Linux C/C++ source security research MVP.
 
-## Scope of this first iteration
+## Scope
 
-- Two MCP servers: read-only source browsing and configured Semgrep scanning.
-- Three Skills: research planning, source audit, patch analysis.
-- One starter Semgrep ruleset.
-- A common Finding JSON schema.
+- Four MCP servers:
+  - `vulnforge-source`: read-only source browsing.
+  - `vulnforge-static`: configured Semgrep scanning.
+  - `vulnforge-patch`: read-only Git patch and history analysis.
+  - `vulnforge-report`: schema-validated finding storage and Markdown reports.
+- Research Skills for vulnerability research, source audit, and patch analysis.
+- A shared Finding JSON schema and local finding store.
 - No automatic exploit generation and no remote-target testing.
 
 ## 1. Requirements
 
 - Linux
+- [uv](https://docs.astral.sh/uv/)
 - Python 3.11+
-- Semgrep installed and available as `semgrep`
+- `git`
+- Semgrep installed separately and available as `semgrep`
 - A local source tree that you are authorized to review
 
-## 2. Install
+## 2. Install with uv
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --group dev
+```
+
+Run checks:
+
+```bash
+uv run pytest
+uv run ruff check .
 ```
 
 Install Semgrep separately using its official installation instructions.
 
-## 3. Configure project
+## 3. Configure projects
 
-Edit `config/projects.yaml` and set the absolute path to your local source checkout.
-The example registers `/opt/vulnforge/source/nginx`.
+Edit `config/projects.yaml` and set the absolute path to each authorized local source checkout:
 
-Set environment variables if the checkout is elsewhere:
-
-```bash
-export VULNFORGE_HOME="$PWD"
-export VULNFORGE_PROJECTS="$PWD/config/projects.yaml"
-export VULNFORGE_SETTINGS="$PWD/config/settings.yaml"
+```yaml
+projects:
+  nginx:
+    path: /absolute/path/to/nginx
+    description: Nginx source tree for authorized local research
+    revision: ""
 ```
+
+Optional environment overrides:
+
+- `VULNFORGE_HOME`
+- `VULNFORGE_PROJECTS`
+- `VULNFORGE_SETTINGS`
+- `VULNFORGE_FINDINGS`
+- `VULNFORGE_REPORTS`
+
+Findings and reports are constrained to configured roots under `VULNFORGE_HOME`.
 
 ## 4. Run MCP servers
 
 Run each server from the repository root:
 
 ```bash
-vulnforge-source
-vulnforge-static
+uv run vulnforge-source
+uv run vulnforge-static
+uv run vulnforge-patch
+uv run vulnforge-report
 ```
 
-Both use MCP stdio transport and should normally be launched by an MCP host/client.
+All servers use MCP stdio transport and are normally launched by an MCP host/client.
 
 ## 5. Example MCP client configuration
-
-Adapt command paths to your machine:
 
 ```json
 {
@@ -73,32 +92,76 @@ Adapt command paths to your machine:
         "VULNFORGE_PROJECTS": "/absolute/path/to/vulnforge/config/projects.yaml",
         "VULNFORGE_SETTINGS": "/absolute/path/to/vulnforge/config/settings.yaml"
       }
+    },
+    "vulnforge-patch": {
+      "command": "/absolute/path/to/vulnforge/.venv/bin/vulnforge-patch",
+      "env": {
+        "VULNFORGE_HOME": "/absolute/path/to/vulnforge",
+        "VULNFORGE_PROJECTS": "/absolute/path/to/vulnforge/config/projects.yaml",
+        "VULNFORGE_SETTINGS": "/absolute/path/to/vulnforge/config/settings.yaml"
+      }
+    },
+    "vulnforge-report": {
+      "command": "/absolute/path/to/vulnforge/.venv/bin/vulnforge-report",
+      "env": {
+        "VULNFORGE_HOME": "/absolute/path/to/vulnforge",
+        "VULNFORGE_PROJECTS": "/absolute/path/to/vulnforge/config/projects.yaml",
+        "VULNFORGE_SETTINGS": "/absolute/path/to/vulnforge/config/settings.yaml"
+      }
     }
   }
 }
 ```
 
-## 6. First research task
+## 6. Research workflow
 
-Ask the connected Agent to:
-1. Call `project_info` and `list_source_files`.
-2. Search for `memcpy|memmove|strcpy|strcat|malloc|realloc`.
-3. Inspect relevant source ranges with `read_source`.
-4. Run `semgrep_scan`.
-5. Produce candidate findings with exact revision and source locations.
-6. Separate confirmed facts from hypotheses.
+1. Register an exact source revision and verify the Git commit.
+2. Call `project_info`, `list_source_files`, and `search_source`.
+3. For historical variants, call `patch_history`, `patch_change_list`, and `patch_show`.
+4. Inspect relevant code with `read_source`.
+5. Run `semgrep_scan` and treat results only as candidate leads.
+6. Save evidence-based records with `create_finding`.
+7. Call `generate_report` to produce `reports/<project>/report.md`.
+8. Separate confirmed facts, inferences, and unverified hypotheses.
 
-## 7. Safety and limitations
+## 7. Finding model
 
-- The source MCP exposes read-only source operations.
-- The static MCP only invokes the configured Semgrep executable and configured rules under `rules/`.
+Finding records are validated against `schemas/finding.schema.json` before storage.
+
+Minimum structure:
+
+```json
+{
+  "finding_id": "finding-example0001",
+  "project_id": "nginx",
+  "status": "hypothesis",
+  "title": "Length validation candidate",
+  "evidence": [
+    {
+      "kind": "source",
+      "path": "src/example.c",
+      "line": 120,
+      "note": "External length is used before a bounds check."
+    }
+  ]
+}
+```
+
+`confirmed` status requires reproducible verification evidence and human review.
+
+## 8. Safety and limitations
+
+- Source and patch MCP tools are read-only.
+- Git revisions are restricted to hexadecimal commit IDs.
+- Static scanning only invokes the configured Semgrep executable and rules under `rules/`.
 - No arbitrary shell command is exposed to the model.
-- Static findings are leads, not confirmed vulnerabilities.
+- Static findings and crashes are leads, not confirmed vulnerabilities.
 - Run untrusted builds and fuzzing in a disposable VM/container with resource limits.
 - Pin source revisions and tool versions for reproducibility.
 
-## 8. Tests
+## 9. Tests
 
 ```bash
-pytest
+uv run pytest
+uv run ruff check .
 ```

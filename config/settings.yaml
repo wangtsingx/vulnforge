@@ -9,3 +9,13 @@ static:
   rules_file: rules/c-memory.yml
   timeout_seconds: 300
   max_output_bytes: 5000000
+
+patch:
+  max_commits: 200
+  max_diff_bytes: 1000000
+  timeout_seconds: 60
+
+report:
+  findings_dir: findings
+  reports_dir: reports
+  max_findings: 1000

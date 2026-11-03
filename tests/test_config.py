@@ -1,6 +1,7 @@
 from pathlib import Path
-import yaml
+
 import pytest
+import yaml
 
 from vulnforge.config import project_root
 
