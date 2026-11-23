@@ -10,3 +10,6 @@ reports/
 tasks/
 coverage/
 databases/
+fuzzing/*/build/
+fuzzing/*/corpus/
+tmp/
