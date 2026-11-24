@@ -18,20 +18,27 @@ Use the MCP tools in this order:
 
 1. CLI: `uv run vulnforge doctor` (check dependencies), then
    `uv run vulnforge add <name> <path> --language <lang>` to register a project.
-2. `vulnforge-tasks`: `create_task`.
-3. `vulnforge-source`: `project_info`, `list_source_files`, `function_search`,
+2. `vulnforge-source`: `list_scan_groups` to see available ~30-minute audit
+   groups. Groups are auto-generated from the source tree; projects can
+   override them in `config/scan_groups.yaml`.
+3. `vulnforge-tasks`: `create_task` with `scan_group="<group_id>"` to bind the
+   task to one group. Use `semgrep_scan_group` (not full-tree scan) unless the
+   user explicitly asks for a full audit.
+4. `vulnforge-source`: `project_info`, `list_source_files`, `function_search`,
    `read_source` to understand the attack surface.
-4. `vulnforge-tasks`: `create_coverage_unit` for each
+5. `vulnforge-tasks`: `create_coverage_unit` for each
    surface x boundary x attack_class you intend to audit.
-5. `vulnforge-static`: `semgrep_scan`.
-6. `vulnforge-tasks`: `import_scan_results` to turn raw scan output into
-   `hypothesis` findings with fingerprint deduplication.
-7. Review each hypothesis by reading source. Promote to `candidate` only with
+6. `vulnforge-static`: `semgrep_scan_group(project, group_id)` to scan only
+   the group's files (~30-minute unit), or `semgrep_scan` for full-tree.
+7. `vulnforge-tasks`: `import_scan_results` to turn raw scan output into
+   `hypothesis` findings with fingerprint deduplication. When the task has a
+   `scan_group`, results are automatically filtered to that group's paths.
+8. Review each hypothesis by reading source. Promote to `candidate` only with
    data-flow reasoning, then `update_coverage_unit(status="candidate")` and
    `link_finding_to_coverage`.
-8. Dynamic validation (optional): `vulnforge-codeql`, `vulnforge-fuzz`.
-9. `vulnforge-report`: `generate_report`.
-10. `vulnforge-tasks`: `audit_status` at any point to see where you are.
+9. Dynamic validation (optional): `vulnforge-codeql`, `vulnforge-fuzz`.
+10. `vulnforge-report`: `generate_report`.
+11. `vulnforge-tasks`: `audit_status` at any point to see where you are.
 
 ## Critical rules
 

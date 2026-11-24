@@ -1,0 +1,122 @@
+# VulnForge scan groups: manual overrides per project.
+# When a project has no override here, groups are auto-generated from the
+# source tree structure (see vulnforge/scan_groups.py). Each group is sized
+# for a ~30-minute audit session. Agents pick one group per task.
+#
+# Override format:
+#   scan_groups:
+#     <project>:
+#       - group_id: <id>
+#         description: <text>
+#         paths: [<relative paths>]
+
+scan_groups:
+  njs:
+    - group_id: core-vm
+      description: VM interpreter core (bytecode dispatch, value model, scope, variable resolution)
+      paths:
+        - src/njs_vmcode.c
+        - src/njs_vm.c
+        - src/njs_value.c
+        - src/njs_scope.c
+        - src/njs_generator.c
+        - src/njs_variable.c
+        - src/njs_module.c
+        - src/njs_disassembler.c
+
+    - group_id: string-encoding
+      description: String, UTF-8/16, number formatting, sprintf
+      paths:
+        - src/njs_string.c
+        - src/njs_utf8.c
+        - src/njs_utf16.c
+        - src/njs_encoding.c
+        - src/njs_dtoa.c
+        - src/njs_sprintf.c
+        - src/njs_number.c
+        - src/njs_str.c
+
+    - group_id: array-typed
+      description: Array, ArrayBuffer, TypedArray, iterator, hash tables
+      paths:
+        - src/njs_array.c
+        - src/njs_array_buffer.c
+        - src/njs_typed_array.c
+        - src/njs_iterator.c
+        - src/njs_flathsh.c
+        - src/njs_arr.c
+
+    - group_id: object-function
+      description: Object model, function, promise, JSON, symbol, date, regexp, lexer, parser
+      paths:
+        - src/njs_object.c
+        - src/njs_object_prop.c
+        - src/njs_function.c
+        - src/njs_promise.c
+        - src/njs_json.c
+        - src/njs_symbol.c
+        - src/njs_boolean.c
+        - src/njs_math.c
+        - src/njs_date.c
+        - src/njs_regexp.c
+        - src/njs_lexer.c
+        - src/njs_lexer_keyword.c
+        - src/njs_parser.c
+        - src/njs_atom.c
+
+    - group_id: memory-infra
+      description: Memory allocator, chain buffer, error, buffer, builtin, utility
+      paths:
+        - src/njs_malloc.c
+        - src/njs_mp.c
+        - src/njs_chb.c
+        - src/njs_error.c
+        - src/njs_buffer.c
+        - src/njs_builtin.c
+        - src/njs_extern.c
+        - src/njs_utils.c
+        - src/njs_trace.c
+        - src/njs_addr2line.c
+        - src/njs_async.c
+        - src/njs_rbtree.c
+        - src/njs_queue.c
+        - src/njs_random.c
+        - src/njs_djb_hash.c
+        - src/njs_murmur_hash.c
+        - src/qjs.c
+        - src/qjs_buffer.c
+
+    - group_id: external-modules
+      description: njs extension modules (crypto, fs, xml, zlib, query_string, shell)
+      paths:
+        - external/njs_webcrypto_module.c
+        - external/njs_crypto_module.c
+        - external/njs_fs_module.c
+        - external/njs_xml_module.c
+        - external/njs_zlib_module.c
+        - external/njs_query_string_module.c
+        - external/njs_regex.c
+        - external/njs_shell.c
+
+    - group_id: qjs-modules
+      description: QuickJS-compatible extension modules
+      paths:
+        - external/qjs_webcrypto_module.c
+        - external/qjs_crypto_module.c
+        - external/qjs_fs_module.c
+        - external/qjs_xml_module.c
+        - external/qjs_zlib_module.c
+        - external/qjs_query_string_module.c
+
+    - group_id: nginx-modules
+      description: nginx HTTP/stream integration modules (requires nginx build context)
+      paths:
+        - nginx/ngx_js.c
+        - nginx/ngx_http_js_module.c
+        - nginx/ngx_stream_js_module.c
+        - nginx/ngx_js_fetch.c
+        - nginx/ngx_js_form.c
+        - nginx/ngx_js_http.c
+        - nginx/ngx_js_regex.c
+        - nginx/ngx_js_shared_dict.c
+        - nginx/ngx_qjs_fetch.c

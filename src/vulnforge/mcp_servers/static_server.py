@@ -93,12 +93,13 @@ def _check_revision(project: str) -> None:
         pass
 
 
-def _run_semgrep(project: str, rules: Path, target: str, timeout: int, max_output: int) -> dict:
+def _run_semgrep(project: str, rules: Path, target: str | list[str], timeout: int, max_output: int) -> dict:
+    targets = [target] if isinstance(target, str) else list(target)
     command = [
 
         str(Path(load_yaml(SETTINGS_CONFIG).get("static", {}).get("semgrep_binary", "semgrep"))),
         "scan", "--config", str(rules),
-        "--json", "--quiet", "--metrics=off", target,
+        "--json", "--quiet", "--metrics=off", *targets,
     ]
     try:
         proc = subprocess.run(
@@ -181,7 +182,7 @@ def semgrep_scan_files(project: str, files: list[str], rules_file: str | None = 
     rules = _validate_rules(rules_file, project)
     timeout = max(10, min(int(cfg.get("timeout_seconds", 300)), 1800))
     max_output = int(cfg.get("max_output_bytes", 5_000_000))
-    result = _run_semgrep(project, rules, " ".join(validated), timeout, max_output)
+    result = _run_semgrep(project, rules, validated, timeout, max_output)
     return {
         "project": project,
         "files_scanned": len(validated),
@@ -257,6 +258,57 @@ def semgrep_scan_list(project: str | None = None) -> dict:
                 "created_at": data.get("created_at"),
             })
     return {"scans": scans}
+
+
+
+
+def _get_scan_group_paths(project: str, group_id: str) -> list[str]:
+    """Resolve scan group paths to validated absolute file paths."""
+    from vulnforge.mcp_servers.source_server import get_allowed_extensions, SCAN_GROUPS_CONFIG
+    from vulnforge.scan_groups import resolve_scan_groups
+
+    root = project_root(project, override_config(PROJECTS_CONFIG))
+    allowed = get_allowed_extensions(project)
+    groups, _ = resolve_scan_groups(project, root, allowed, SCAN_GROUPS_CONFIG)
+    group = next((g for g in groups if g.get("group_id") == group_id), None)
+    if group is None:
+        available = [g.get("group_id") for g in groups]
+        raise ValueError(f"Scan group not found: {group_id}. Available: {available}")
+    validated: list[str] = []
+    for p in group.get("paths", []):
+        target = (root / p).resolve()
+        if target.is_file() and target.suffix in allowed:
+            validated.append(str(target))
+        elif target.is_dir():
+            for f in sorted(target.rglob("*")):
+                if f.is_file() and f.suffix in allowed:
+                    validated.append(str(f))
+    if not validated:
+        raise ValueError(f"Scan group '{group_id}' has no matching source files")
+    return validated
+
+
+@mcp.tool()
+def semgrep_scan_group(project: str, group_id: str, rules_file: str | None = None) -> dict:
+    """Scan only the files in a named scan group (~30-minute audit unit).
+
+    Use list_scan_groups (source_server) to see available groups.
+    """
+    root = project_root(project, override_config(PROJECTS_CONFIG))
+    _check_revision(project)
+    validated = _get_scan_group_paths(project, group_id)
+    cfg = load_yaml(SETTINGS_CONFIG).get("static", {})
+    rules = _validate_rules(rules_file, project)
+    timeout = max(10, min(int(cfg.get("timeout_seconds", 300)), 1800))
+    max_output = int(cfg.get("max_output_bytes", 5_000_000))
+    result = _run_semgrep(project, rules, validated, timeout, max_output)
+    return {
+        "project": project,
+        "group_id": group_id,
+        "files_scanned": len(validated),
+        **result,
+        "note": "Static findings are candidates; they are not confirmed vulnerabilities.",
+    }
 
 
 def main() -> None:

@@ -30,8 +30,12 @@ SETTINGS_CONFIG = Path(os.getenv("VULNFORGE_SETTINGS", BASE / "config/settings.y
 
 
 @mcp.tool()
-def create_task(project: str, title: str, scope: str = "") -> dict:
-    """Create a new research task for a registered project."""
+def create_task(project: str, title: str, scope: str = "", scan_group: str = "") -> dict:
+    """Create a new research task for a registered project.
+
+    Optionally bind to a scan group (see list_scan_groups) so the task covers
+    one ~30-minute audit unit instead of the full source tree.
+    """
     root = project_root(project, override_config(PROJECTS_CONFIG))
     task_id = new_task_id()
     task = {
@@ -39,6 +43,7 @@ def create_task(project: str, title: str, scope: str = "") -> dict:
         "project_id": project,
         "title": title[:500],
         "scope": scope[:2000],
+        "scan_group": scan_group[:100],
         "status": "created",
         "source_root": str(root),
         "findings": [],
@@ -93,14 +98,6 @@ def set_task_verification(task_id: str, reproducible: bool, human_reviewed: bool
     return save_task(task, SETTINGS_CONFIG)
 
 
-def main() -> None:
-    mcp.run(transport="stdio")
-
-
-if __name__ == "__main__":
-    main()
-
-
 @mcp.tool()
 def audit_status(task_id: str) -> dict:
     """Return a one-call snapshot of task status, coverage summary, and finding counts."""
@@ -153,8 +150,46 @@ def import_scan_results(project: str, task_id: str, scan_output: dict) -> dict:
     Groups results by (path, check_id), generates stable fingerprints, creates
     hypothesis findings and planned coverage units. Existing fingerprints return
     the existing finding_id without creating duplicates.
+
+    If the task has a scan_group, only results for paths in that group are
+    imported (full_tree=true overrides this).
     """
-    load_task(task_id, SETTINGS_CONFIG)
+    task = load_task(task_id, SETTINGS_CONFIG)
+    task_group = str(task.get("scan_group") or "")
+    full_tree = bool(scan_output.get("full_tree", False))
+    if task_group and not full_tree:
+        from vulnforge.mcp_servers.source_server import SCAN_GROUPS_CONFIG
+        from vulnforge.scan_groups import resolve_scan_groups
+        _sroot = Path(source_root)
+        allowed_ext = {".c", ".h", ".cc", ".cpp", ".hpp", ".go", ".rs", ".py"}
+        groups, _ = resolve_scan_groups(project, _sroot, allowed_ext, SCAN_GROUPS_CONFIG)
+        group = next((g for g in groups if g.get("group_id") == task_group), None)
+        if group is None:
+            raise ValueError(f"Task scan_group '{task_group}' not found in scan_groups.yaml")
+        source_root = str(project_root(project, override_config(PROJECTS_CONFIG)))
+        allowed_paths = set()
+        for gp in group.get("paths", []):
+            target = (Path(source_root) / gp).resolve()
+            if target.is_file():
+                allowed_paths.add(gp)
+            elif target.is_dir():
+                allowed_paths.add(gp)
+                for f in target.rglob("*"):
+                    if f.is_file():
+                        allowed_paths.add(f.relative_to(Path(source_root)).as_posix())
+        raw_results = scan_output.get("findings", [])
+        filtered = []
+        for r in raw_results:
+            rp = str(r.get("path") or r.get("location", {}).get("path", ""))
+            try:
+                resolved = (Path(source_root) / rp).resolve()
+                rel = resolved.relative_to(Path(source_root)).as_posix()
+            except (ValueError, OSError):
+                rel = rp
+            if rel in allowed_paths or any(rel.startswith(p + "/") for p in allowed_paths if not Path(p).suffix):
+                filtered.append(r)
+        scan_output = dict(scan_output)
+        scan_output["findings"] = filtered
     from vulnforge.coverage import coverage_id_from_refs
     from vulnforge.findings import list_findings, new_finding_id, save_finding
 
@@ -467,3 +502,11 @@ def coverage_summary_for_task(task_id: str) -> dict:
 def get_coverage_ledger(task_id: str) -> dict:
     """Load and validate one task coverage ledger."""
     return {"task_id": task_id, "units": load_ledger(task_id, SETTINGS_CONFIG)}
+
+
+def main() -> None:
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

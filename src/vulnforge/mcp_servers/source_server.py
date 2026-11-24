@@ -7,12 +7,16 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from vulnforge.config import load_yaml, override_config, project_root
+from vulnforge.scan_groups import resolve_scan_groups
 
 mcp = FastMCP("vulnforge-source")
 BASE = Path(os.getenv("VULNFORGE_HOME", ".")).resolve()
 PROJECTS_CONFIG = Path(os.getenv("VULNFORGE_PROJECTS", BASE / "config/projects.yaml"))
 SETTINGS_CONFIG = Path(os.getenv("VULNFORGE_SETTINGS", BASE / "config/settings.yaml"))
 LANGUAGES_CONFIG = Path(os.getenv("VULNFORGE_LANGUAGES", BASE / "config/languages.yaml"))
+SCAN_GROUPS_CONFIG = Path(os.getenv("VULNFORGE_SCAN_GROUPS", BASE / "config/scan_groups.yaml"))
+
+IGNORE_DIRS = {".git", ".svn", "node_modules", "__pycache__", ".venv", "build", "dist"}
 
 
 def settings() -> dict:
@@ -81,8 +85,6 @@ def detect_languages(root: Path) -> list[str]:
         lang = LANG_SIGNATURES.get(path.suffix)
         if lang:
             found.add(lang)
-        if len(found) >= len(LANG_SIGNATURES):
-            break
     return sorted(found)
 
 
@@ -159,48 +161,36 @@ def search_source(project: str, pattern: str, limit: int = 50) -> dict:
                 results.append({
                     "file": path.relative_to(root).as_posix(),
                     "line": line_no,
-                    "text": line.strip()[:500],
+                    "text": line[:300],
                 })
                 if len(results) >= limit:
-                    return {"project": project, "results": results, "truncated": True}
-    return {"project": project, "results": results, "truncated": False}
+                    return {"project": project, "matches": results, "count": len(results)}
+    return {"project": project, "matches": results, "count": len(results)}
 
 
 @mcp.tool()
 def read_source(project: str, relative_path: str, start_line: int, end_line: int) -> dict:
-    """Read a bounded source range with stable line-number prefixes."""
-    if start_line < 1 or end_line < start_line:
-        raise ValueError("Invalid line range")
-    max_lines = int(settings().get("max_read_lines", 300))
-    if end_line - start_line + 1 > max_lines:
-        raise ValueError(f"Requested range exceeds {max_lines} lines")
+    """Read a bounded line range from a source file."""
     path = safe_file(project, relative_path)
+    max_lines = int(settings().get("max_read_lines", 300))
+    start_line = max(1, int(start_line))
+    end_line = min(start_line + max_lines - 1, int(end_line))
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    actual_end = min(end_line, len(lines))
-    content = "\n".join(f"{n}: {lines[n - 1]}" for n in range(start_line, actual_end + 1))
+    selected = lines[start_line - 1:end_line]
     return {
         "project": project,
         "file": relative_path,
         "start_line": start_line,
-        "end_line": actual_end,
-        "content": content,
+        "end_line": end_line,
+        "total_lines": len(lines),
+        "content": "\n".join(selected),
     }
-
-
-def main() -> None:
-    mcp.run(transport="stdio")
-
-
-if __name__ == "__main__":
-    main()
 
 
 FUNC_DEF_RE = re.compile(
     r"^[ \t]*(?:static\s+|inline\s+|const\s+|unsigned\s+|signed\s+|struct\s+|enum\s+|union\s+)*"
     r"(?:[\w\*]\s*)+?(\w+)\s*\([^;{)]*\)\s*\{",
 )
-
-IGNORE_DIRS = {".git", ".svn", "node_modules", "__pycache__", ".venv", "build", "dist"}
 
 
 def iter_source_files(root: Path, allowed: set[str], max_bytes: int):
@@ -228,43 +218,36 @@ def function_search(project: str, keyword: str, limit: int = 50) -> dict:
         except OSError:
             continue
         for line_no, line in enumerate(lines, 1):
-            match = FUNC_DEF_RE.match(line)
-            if not match:
-                continue
-            func_name = match.group(1)
-            if keyword.lower() not in func_name.lower():
-                continue
-            results.append({
-                "file": path.relative_to(root).as_posix(),
-                "line": line_no,
-                "function": func_name,
-                "text": line.strip()[:300],
-            })
-            if len(results) >= limit:
-                return {"project": project, "results": results, "truncated": True}
-    return {"project": project, "results": results, "truncated": False}
+            if keyword in line:
+                match = FUNC_DEF_RE.match(line)
+                if match:
+                    results.append({
+                        "file": path.relative_to(root).as_posix(),
+                        "line": line_no,
+                        "function": match.group(1),
+                        "signature": line.strip()[:300],
+                    })
+                    if len(results) >= limit:
+                        return {"project": project, "matches": results, "count": len(results)}
+    return {"project": project, "matches": results, "count": len(results)}
 
 
 @mcp.tool()
 def function_context(project: str, relative_path: str, line: int, context_lines: int = 30) -> dict:
-    """Read a function and its surrounding context starting from a line number."""
-    get_root(project)
+    """Read source context around a line, clamped to file bounds."""
     path = safe_file(project, relative_path)
-    max_lines = int(settings().get("max_read_lines", 300))
-    context_lines = max(5, min(int(context_lines), max_lines))
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    if line < 1 or line > len(lines):
-        raise ValueError(f"Line {line} is out of range (1-{len(lines)})")
+    line = max(1, min(int(line), len(lines)))
+    context_lines = max(1, min(int(context_lines), 100))
     start = max(1, line - context_lines // 2)
-    end = min(len(lines), line + context_lines)
-    content = "\n".join(f"{n}: {lines[n - 1]}" for n in range(start, end + 1))
+    end = min(len(lines), line + context_lines // 2)
     return {
         "project": project,
         "file": relative_path,
-        "anchor_line": line,
+        "line": line,
         "start_line": start,
         "end_line": end,
-        "content": content,
+        "content": "\n".join(lines[start - 1:end]),
     }
 
 
@@ -280,3 +263,46 @@ def list_functions(project: str, relative_path: str) -> dict:
         if match:
             functions.append({"function": match.group(1), "line": line_no})
     return {"project": project, "file": relative_path, "functions": functions, "count": len(functions)}
+
+
+@mcp.tool()
+def list_scan_groups(project: str) -> dict:
+    """List available scan groups (path subsets) for a project.
+
+    Groups are auto-generated from the source tree structure, sized for
+    ~30-minute audit sessions. Projects can override groups in
+    config/scan_groups.yaml.
+    """
+    root = get_root(project)
+    allowed = get_allowed_extensions(project)
+    groups, is_override = resolve_scan_groups(project, root, allowed, SCAN_GROUPS_CONFIG)
+    # Count files per group
+    result = []
+    for g in groups:
+        file_count = 0
+        for p in g.get("paths", []):
+            target = (root / p).resolve()
+            if target.is_file() and target.suffix in allowed:
+                file_count += 1
+            elif target.is_dir():
+                file_count += sum(1 for f in target.rglob("*") if f.is_file() and f.suffix in allowed)
+        result.append({
+            "group_id": g.get("group_id", ""),
+            "description": g.get("description", ""),
+            "file_count": file_count,
+            "paths": g.get("paths", []),
+        })
+    return {
+        "project": project,
+        "groups": result,
+        "count": len(result),
+        "source": "override" if is_override else "auto-generated",
+    }
+
+
+def main() -> None:
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
